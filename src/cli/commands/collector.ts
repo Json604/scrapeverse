@@ -11,33 +11,37 @@ export const MAX_CREATE_DESCRIPTION = 500;
 /**
  * The plain-language description handed to Scraper Studio, rendered from our portable spec.
  *
- * Two hard-won constraints:
- *  - It must demand a FLAT row-per-item schema. The first generated collector produced a nested
- *    shape (one row per page, empty inner array), and `scraper heal` fixes selectors, not schemas.
- *  - It must be short and single-line, or create fails with "Invalid description".
+ * Three hard-won constraints:
+ *  - It must FORBID navigation. Left to itself the generator treats a ranked page as a product
+ *    listing and builds a two-stage listing→detail collector: stage one collects item URLs into a
+ *    `product_page_url` field, stage two never fills the payload, and the result is rows of empty
+ *    arrays. Everything we want is on the list page, so say so explicitly.
+ *  - It must demand a FLAT row-per-item schema; `scraper heal` fixes selectors, not schemas.
+ *  - It must fit the length cap WITHOUT truncating a field blurb. A cut mid-phrase — "the
+ *    repository identifier in owner/name form, from the" — reads as a broken instruction and is
+ *    worse input than no blurb at all. So blurbs are dropped whole, never clipped.
  */
 export function describeForCreate(source: SourceId): string {
   const a = getAdapter(source);
-  const lead = `Return one flat row per item in the ranked list, not one row for the whole page. Fields: `;
-  const tail = ` Take all values from the list page itself.`;
+  const lead =
+    `Return one row for each item in the list on this page. Do not open or follow any link — ` +
+    `every value is visible on this page. Fields: `;
 
-  // Shrink field blurbs until the WHOLE description fits. Hard-slicing the composed string
-  // instead would clip the trailing instruction, which is the part that prevents detail-page visits.
-  for (let perField = 80; perField >= 16; perField -= 4) {
-    const fields = a.spec.fields.map((f) => `${f.name} (${shorten(f.description, perField)})`).join("; ");
-    const out = `${lead}${fields}.${tail}`;
+  // Drop blurbs from the LONGEST field first: a complete instruction carrying fewer hints beats a
+  // truncated one. Field NAMES are load-bearing and are never dropped.
+  const byLength = [...a.spec.fields].sort((x, y) => y.description.length - x.description.length);
+  const dropped = new Set<string>();
+
+  for (let i = 0; i <= byLength.length; i++) {
+    const body = a.spec.fields
+      .map((f) => (dropped.has(f.name) ? f.name : `${f.name} (${f.description})`))
+      .join("; ");
+    const out = `${lead}${body}.`;
     if (out.length <= MAX_CREATE_DESCRIPTION) return out;
+    if (i < byLength.length) dropped.add(byLength[i]!.name);
   }
-  // Last resort: names only. Still a valid instruction, just without the hints.
-  return `${lead}${a.spec.fields.map((f) => f.name).join(", ")}.${tail}`;
-}
-
-/** Trim on a word boundary — a description cut mid-word reads as noise to the generator. */
-function shorten(text: string, max: number): string {
-  if (text.length <= max) return text;
-  const cut = text.slice(0, max);
-  const at = cut.lastIndexOf(" ");
-  return (at > max * 0.6 ? cut.slice(0, at) : cut).trim();
+  // Unreachable in practice: names alone are far under the cap for every source we ship.
+  return `${lead}${a.spec.fields.map((f) => f.name).join(", ")}.`.slice(0, MAX_CREATE_DESCRIPTION);
 }
 
 export function registerCollector(program: Command): void {

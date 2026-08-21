@@ -1,6 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { allAdapters } from "./index.ts";
+import { allAdapters, allSourceIds, getAdapter } from "./index.ts";
+import { describeForCreate, MAX_CREATE_DESCRIPTION } from "../../cli/commands/collector.ts";
 import { fieldValue } from "../validate/schema.ts";
 import type { RawRow } from "../backend/types.ts";
 
@@ -58,4 +59,28 @@ describe("normalization is idempotent", () => {
       assert.deepEqual(twice, once, `${a.id} loses data on re-normalization`);
     });
   }
+});
+
+describe("collector create descriptions", () => {
+  test("every source fits the API cap and never emits a truncated blurb", () => {
+    for (const id of allSourceIds()) {
+      const desc = describeForCreate(id);
+      assert.ok(
+        desc.length <= MAX_CREATE_DESCRIPTION,
+        `${id}: description is ${desc.length} chars, over the ${MAX_CREATE_DESCRIPTION} cap`,
+      );
+
+      // Every parenthesised blurb must be a COMPLETE spec description. A mid-phrase cut such as
+      // "the repository identifier in owner/name form, from the" is worse input to the generator
+      // than no blurb at all — it reads as a broken instruction.
+      const full = new Set(getAdapter(id).spec.fields.map((f) => f.description));
+      for (const m of desc.matchAll(/\(([^()]*)\)/g)) {
+        const blurb = m[1] ?? "";
+        assert.ok(
+          full.has(blurb),
+          `${id}: blurb "${blurb}" is not a complete spec description — it was truncated`,
+        );
+      }
+    }
+  });
 });

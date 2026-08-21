@@ -20,12 +20,12 @@ export const githubTrending: SourceAdapter = {
     createdAt: "2026-08-21T00:00:00.000Z",
     supersedes: null,
     fields: [
-      { name: "repo", description: "the repository identifier in owner/name form, from the row heading link", type: "string", required: true },
-      { name: "description", description: "the one-line repository description under the heading", type: "string", required: false },
-      { name: "language", description: "the primary programming language label in the row footer", type: "string", required: false },
-      { name: "stars", description: "total star count shown in the row footer", type: "number", required: true },
-      { name: "forks", description: "total fork count shown in the row footer", type: "number", required: false },
-      { name: "starsToday", description: "the 'N stars today' figure at the right of the row footer", type: "number", required: true },
+      { name: "repo", description: "repository name in owner/name form", type: "string", required: true },
+      { name: "description", description: "the one-line description under the name", type: "string", required: false },
+      { name: "language", description: "the primary programming language label", type: "string", required: false },
+      { name: "stars", description: "total star count", type: "number", required: true },
+      { name: "forks", description: "total fork count", type: "number", required: false },
+      { name: "starsToday", description: "the number of stars gained today", type: "number", required: true },
     ],
   },
 

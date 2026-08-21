@@ -186,9 +186,21 @@ Not aspirational — these were run, and the failures are reported as they happe
   output schema — one row per page with an empty `repositories` array — instead of one flat row per
   list item. Driftwatch classified it `schema invalid: zero rows extracted` and **emitted nothing**
   rather than recording 0 rows as truth.
-- **`heal` fixes selectors, not output schemas.** The heal ran, was preview-gated, approved, and
-  post-verified — and the collector still returned the same nested shape. The real fix was at
-  create time: the generated description now explicitly demands one flat row per list item.
+- **The generated collector is a two-step scraper, and that is the live blocker.** `scraper create`
+  plans `github.com/trending` as a listing→detail pipeline: step one collects repository URLs, step
+  two visits each repository page and emits nothing. Output is 16 rows of
+  `{ repositories: [], product_page_url }` — with the URLs correct and in rank order, so the listing
+  itself parses fine. This shape is **invariant across three different create descriptions**,
+  including one that explicitly forbids following links.
+- **`heal` produces the correct fix; `approve` does not make it live.** A heal prompt demanding flat
+  top-level fields returned a proposed template with **one step**, whose preview emitted every field
+  with real values (`repo: "modular / modular", stars: "28,632", starsToday: "905"`).
+  `scraper approve` reported `status: done` with a `user_approval` step — and a freshly triggered
+  collection still returned the old two-step output. Not caching: verified on a new collection id.
+  The healed template exists and is right; it simply is not the one being served. Activating it is a
+  Scraper Studio browser-IDE action.
+- **The saga handles this correctly.** Post-verify sees zero usable rows and rolls back rather than
+  marking the collector active — which is the behaviour the regression test below pins down.
 - **Post-verification had a bug, and it is now a regression test.** The saga accepted a
   verification run whose status was `calibrating` as proof the heal worked. `calibrating` means
   *"not enough history to classify yet"* — it is not evidence, and accepting it let a collector

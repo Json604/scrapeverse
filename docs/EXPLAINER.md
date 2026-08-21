@@ -274,12 +274,30 @@ Have these ready. Being first to your own limitations is worth more than hoping 
 | v1 | 17 rows, nested schema — one row per *page* with an empty `repositories[]` |
 | v2, v3 | rejected at creation: `Invalid description` (undocumented length limit, ~480 chars OK, 700 not) |
 | v4 | generated cleanly, **0 rows** |
+| v5 | same two-step shape; heal proposed a correct 1-step template that `approve` did not activate |
 
-The honest framing: v1's `product_page_url` held real repo URLs, so the scraper *can* see the
-listing. This reads like a two-stage collector — collect URLs, then visit each page — where stage two
-never fills. **`scraper heal` fixes selectors, not output schemas**, so healing can't reach it.
-Bright Data's docs say AI-generated collectors can be opened in the Scraper Studio browser IDE;
-that's where it gets finished, and it can't be done headlessly.
+The mechanism is now known, and it isn't the description. `scraper create` plans the page as a
+listing→detail pipeline: step one collects repository URLs, step two visits each repository page and
+emits nothing. The URLs come back correct and in rank order, so the listing parses fine — the
+payload just never fills. **This shape is invariant across three different create descriptions**,
+including one that explicitly forbids following links.
+
+`scraper heal` *can* fix it. Asked for flat top-level fields, it proposed a **one-step** template
+whose preview emitted every field with real values:
+
+```json
+{"repo": "modular / modular", "description": "The Modular Platform (includes MAX & Mojo)",
+ "language": "", "stars": "28,632", "forks": "3,048", "starsToday": "905"}
+```
+
+But `scraper approve` reports `status: done` and the live collector keeps serving the old two-step
+template — verified on a freshly triggered collection, so it isn't caching. The healed template
+exists and is correct; it just isn't the one being served. Activating it is a browser-IDE action.
+
+If someone asks why you didn't just fix it: the fix isn't reachable from the API surface
+(`create`, `run`, `heal`, `approve` are the only commands, and there is no endpoint that returns a
+collector's steps). Worth adding that the system's own post-verify catches this — it sees zero
+usable rows and rolls back instead of marking the collector healthy.
 
 What this does and doesn't cost: the engine, classifier, gate, heal saga, replay and query layer all
 run on identical code paths in the fixture and replay channels. The gap is collector *authoring*,

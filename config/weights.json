@@ -1,0 +1,22 @@
+{
+  "version": "0.1.0-uncalibrated",
+
+  "_comment": "Every threshold lives here and is fit from the eval set or from a source's own healthy history. These are STARTING POINTS, not calibrated values. The version string says so on purpose: a number quoted from an uncalibrated file should be read as a default, never as a measured result.",
+
+  "breadthContentMax": 0.25,
+  "breadthStructureMin": 0.6,
+  "confusionFlag": 0.6,
+
+  "coverageCollapse": 0.6,
+  "coverageWarn": 0.9,
+
+  "softEscalationRuns": 3,
+  "calibrationRuns": 3,
+  "calibrationMinCoverage": 0.9,
+  "overlapMinSamples": 10,
+  "candidateTtlRuns": 5,
+
+  "healPromptMaxChars": 1000,
+  "maxHealAttempts": 3,
+  "baselineWindow": 10
+}

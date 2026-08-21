@@ -187,11 +187,18 @@ export function renderHealPrompt(
     const fields = context.specFields?.length
       ? context.specFields.map((f) => `${f.name} (${f.description})`).join("; ")
       : brokenFields.map((b) => b.field).join(", ");
+    // This wording is not a guess. It is the prompt that made Scraper Studio propose a correct
+    // single-step template for a collector it had planned as a listing→detail pipeline. The
+    // load-bearing parts are "flat top-level fields", the explicit ban on a nested array, and the
+    // instruction not to follow per-item links — without the last one the generator keeps a second
+    // step whose payload never fills.
     return truncate(
       `The scraper is returning no usable rows${context.rowCount === 0 ? " at all" : ""}. ` +
-      `It should return ONE ROW PER ITEM in the ranking list on the page, not a single row for the page ` +
-      `and not a nested array. Each row must contain: ${fields}. ` +
-      `Find the repeating list item element on the page and emit one output row for each one.`,
+      `Each output row must contain these flat top-level fields, all read from the list page ` +
+      `itself: ${fields}. Do not nest them inside an array and do not emit an empty array. ` +
+      `Do not open or follow the link to each item's own page — every value is already visible ` +
+      `on the list page. Return one row per item in the list; if the list shows 25 items, return ` +
+      `25 rows.`,
       w.healPromptMaxChars,
     );
   }

@@ -1,0 +1,47 @@
+name: driftwatch
+
+# Vercel Hobby cron is capped at once-per-day with a 10s function timeout, which cannot hold a
+# scrape-and-poll loop across six sources. GitHub Actions is the scheduler; Vercel serves reads.
+on:
+  schedule:
+    - cron: "17 */6 * * *"      # daily sources, every 6h
+    - cron: "40 3 1 * *"        # monthly overlay, 1st of the month
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "source id, or 'all'"
+        default: "all"
+
+concurrency:
+  # Per-source isolation: a 15-minute heal must not block or overlap the next scheduled run.
+  group: driftwatch-${{ github.event.inputs.source || 'all' }}
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+
+      - name: Run the loop
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          BRIGHTDATA_API_KEY: ${{ secrets.BRIGHTDATA_API_KEY }}
+        run: |
+          if [ "${{ github.event.schedule }}" = "40 3 1 * *" ]; then
+            npx tsx src/cli/index.ts run all --monthly --json
+          else
+            npx tsx src/cli/index.ts run "${{ github.event.inputs.source || 'all' }}" --json
+          fi
+
+      - name: Report health
+        if: always()
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+        run: npx tsx src/cli/index.ts status

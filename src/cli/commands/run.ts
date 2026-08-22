@@ -29,6 +29,15 @@ export function registerRun(program: Command): void {
         const backend = opts.fixture ? new FixtureBackend() : new BrightDataBackend();
         const collectorId = opts.fixture ?? opts.collector ?? (await storedCollector(id)) ?? "";
         if (!collectorId) {
+          if (source === "all") {
+            results.push({
+              source: id, status: "skipped", rows: 0, action: "store_only",
+              reason: "no collector created yet", events: 0, candidates: 0,
+              snapshotId: null, inserted: false,
+            });
+            if (!opts.json) console.log(`\n  ${id}\n  skipped — no collector. driftwatch collector create ${id}`);
+            continue;
+          }
           throw new Error(`no collector for "${id}". Run: driftwatch collector create ${id}`);
         }
 

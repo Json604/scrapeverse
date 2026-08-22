@@ -30,7 +30,9 @@ export const githubTrending: SourceAdapter = {
   },
 
   expectations: {
-    rowRange: [20, 25],
+    // Live extraction currently returns ~17–25 (sponsored slots, partial lists).
+    // Archived captures sit around 15. The historical floor tightens after calibration.
+    rowRange: [15, 30],
     watchKeys: ["language", "description"],
     // NOTE: these name NORMALIZED record fields (resolved by fieldValue), not raw spec
     // fields. `repo` becomes `title`/`nativeId` during normalization.

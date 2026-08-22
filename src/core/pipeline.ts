@@ -13,6 +13,7 @@ import { uuid, nowIso, shortHash } from "./util.ts";
 import { loadWeights } from "./config.ts";
 import { stripPii } from "./sources/types.ts";
 import { expectationsFor } from "./sources/expectations.ts";
+import { unwrapCollectorRows } from "./backend/unwrap.ts";
 
 export interface RunOptions {
   source: SourceId;
@@ -42,7 +43,7 @@ export async function runSource(opts: RunOptions): Promise<RunResult> {
 
   const fetched = await opts.backend.fetch({ collectorId: opts.collectorId, url });
   const capturedAt = opts.capturedAt ?? nowIso();
-  const records = adapter.normalize(stripPii(fetched.rows), capturedAt);
+  const records = adapter.normalize(stripPii(unwrapCollectorRows(fetched.rows)), capturedAt);
   const hash = payloadHash(records);
 
   const c = await collections();

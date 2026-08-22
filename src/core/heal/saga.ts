@@ -22,6 +22,7 @@ import { collections } from "../db.ts";
 import { uuid, nowIso } from "../util.ts";
 import { loadWeights } from "../config.ts";
 import { stripPii } from "../sources/types.ts";
+import { unwrapCollectorRows } from "../backend/unwrap.ts";
 
 export interface HealOptions {
   source: SourceId;
@@ -41,23 +42,27 @@ export interface HealOutcome {
   events: number;
 }
 
-export async function healSource(opts: HealOptions): Promise<HealOutcome> {
-  const adapter = getAdapter(opts.source);
-  const weights = loadWeights();
-  const c = await collections();
-
-  // A non-live saga must NEVER lease a live collector: channel isolation in Mongo does not
-  // protect shared remote state, and there is no clone command to fall back on.
-  if (opts.channel !== "live" && !opts.collectorId.startsWith("fixture") && !opts.collectorId.includes(opts.channel)) {
+/**
+ * A non-live saga must NEVER lease a live collector: channel isolation in Mongo does not
+ * protect shared remote state, and there is no clone command to fall back on.
+ *
+ * Live collectors are `c_*` ids from Scraper Studio. Fixture paths (`github_trending/v1`) and
+ * wayback labels are not live collectors — the old `startsWith("fixture")` check refused them,
+ * which made `heal --dry-run --fixture …` unusable on the demo channel.
+ */
+export function assertHealTargetAllowed(channel: Channel, collectorId: string): void {
+  if (channel === "live") return;
+  if (/^c_[a-z0-9]+$/i.test(collectorId)) {
     throw new Error(
-      `refusing to heal collector "${opts.collectorId}" from channel "${opts.channel}": ` +
+      `refusing to heal collector "${collectorId}" from channel "${channel}": ` +
       `non-live channels require their own collector, or healing would mutate the live one.`,
     );
   }
+}
 
-  const lease = await acquireLease(opts.collectorId, opts.channel);
-  if (!lease) throw new Error(`collector ${opts.collectorId} is already being healed (lease held)`);
-
+export async function healSource(opts: HealOptions): Promise<HealOutcome> {
+  assertHealTargetAllowed(opts.channel, opts.collectorId);
+  const weights = loadWeights();
   const prompt = opts.diagnosis.suggestedHealPrompt.slice(0, weights.healPromptMaxChars);
   const attempt: HealAttempt = {
     attemptId: `heal_${uuid()}`, source: opts.source, channel: opts.channel,
@@ -67,6 +72,25 @@ export async function healSource(opts: HealOptions): Promise<HealOutcome> {
     healthBefore: opts.before.health, healthAfter: null,
     previewVerified: false, postVerified: false, at: nowIso(),
   };
+
+  // --dry-run must not dump a template or take a lease: those talk to Scraper Studio, and
+  // a fixture path is not a collector id.
+  if (opts.dryRun) {
+    return {
+      state: "proposed",
+      attempt,
+      message: prompt
+        ? `dry run. prompt (${prompt.length}/${weights.healPromptMaxChars} chars):\n  ${prompt}`
+        : "dry run. no actionable diagnosis — nothing to heal",
+      events: 0,
+    };
+  }
+
+  const adapter = getAdapter(opts.source);
+  const c = await collections();
+
+  const lease = await acquireLease(opts.collectorId, opts.channel);
+  if (!lease) throw new Error(`collector ${opts.collectorId} is already being healed (lease held)`);
 
   const finish = async (state: HealState, message: string, events = 0): Promise<HealOutcome> => {
     attempt.state = state;
@@ -83,7 +107,6 @@ export async function healSource(opts: HealOptions): Promise<HealOutcome> {
     attempt.priorTemplateRef = ref;
 
     if (!prompt) return await finish("rejected", "no actionable diagnosis — nothing to heal");
-    if (opts.dryRun) return await finish("proposed", `dry run. prompt (${prompt.length}/${weights.healPromptMaxChars} chars):\n  ${prompt}`);
 
     // ── steps 3–4: heal, then gate on the preview ────────────────────────────
     const proposal = await opts.admin.heal(opts.collectorId, prompt);
@@ -94,7 +117,7 @@ export async function healSource(opts: HealOptions): Promise<HealOutcome> {
     }
     if (!(await holdsLease(lease))) return await finish("rejected", "lease lost during heal — refusing to approve");
 
-    const previewRecords = adapter.normalize(stripPii(proposal.previewResult), nowIso());
+    const previewRecords = adapter.normalize(stripPii(unwrapCollectorRows(proposal.previewResult)), nowIso());
     const previewOk = previewGate(previewRecords, adapter, opts.diagnosis);
     attempt.previewVerified = previewOk.ok;
 

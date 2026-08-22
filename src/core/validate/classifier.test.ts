@@ -180,6 +180,18 @@ describe("break vs change — the cases that killed earlier drafts", () => {
     assert.equal(status, "healthy", "a quiet source must not be treated as a fetch failure");
   });
 
+  test("BUSY LEADERBOARD: required metrics moving on most rows is content, not a break", () => {
+    // HN scores / GH stars move constantly. Breadth-as-structure is for watch keys (columns),
+    // not for required metrics, or a live front page is permanently "broken".
+    const prev = rows(24);
+    const curr = rows(24, (i) => ({
+      metrics: { rating: { name: "rating", value: 10 + i, unit: "total" } },
+    }));
+    const exp = { ...EXP, requiredFields: ["title", "rating"], watchKeys: ["pricingModel"] };
+    const { status } = run(curr, prev, { expectations: exp });
+    assert.equal(status, "healthy");
+  });
+
   test("CANARY: a sparse mismatch is a real change, not a heal rejection", () => {
     // The self-inflicted wound: a pinned pricingModel=Free canary would otherwise VETO the
     // very Free→Paid event this product exists to capture.

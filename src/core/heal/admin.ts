@@ -71,7 +71,12 @@ export class CliCollectorAdmin implements CollectorAdmin {
   }
 
   async approve(collectorId: string, reject = false) {
-    const args = ["scraper", "approve", collectorId, ...(reject ? ["--reject"] : [])];
+    // `--auto-save` is what actually activates the healed template. `approve` without it
+    // reports status: done and leaves the old steps live — verified on GitHub Trending.
+    const args = [
+      "scraper", "approve", collectorId,
+      ...(reject ? ["--reject"] : ["--auto-save"]),
+    ];
     const out = (await bd(args)) as { status?: string };
     return { status: String(out.status ?? (reject ? "rejected" : "done")) };
   }

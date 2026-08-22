@@ -61,8 +61,9 @@ export function registerCalibrate(program: Command): void {
       console.log(`  rows        ${latest.records.length}`);
 
       if (!opts.sign) {
+        const ch = channel !== "live" ? ` --channel ${channel}` : "";
         console.log(`\n  review the sample above, then sign with:`);
-        console.log(`    driftwatch calibrate ${source} --sign\n`);
+        console.log(`    driftwatch calibrate ${source}${ch} --sign\n`);
         return;
       }
       if (!consistent) {

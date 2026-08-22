@@ -1,23 +1,9 @@
 import type { Command } from "commander";
-import { runEval, buildFixtureCases, type EvalSet, type EvalResult } from "../../core/eval/runner.ts";
+import {
+  runEval, buildFixtureCases, syntheticBaseline, resolveEvalSets, type EvalResult,
+} from "../../core/eval/runner.ts";
 import { getAdapter } from "../../core/sources/index.ts";
 import { loadWeights } from "../../core/config.ts";
-import type { NormalizedRecord } from "../../core/types.ts";
-
-const PRICES = ["Free", "Freemium", "Paid", "Free Trial"];
-const CATEGORIES = ["Image", "Chat", "Code", "Audio"];
-
-function syntheticBaseline(n = 24): NormalizedRecord[] {
-  return Array.from({ length: n }, (_, i) => ({
-    source: "futurepedia" as const, entityType: "tool" as const,
-    nativeId: `tool-${i}`, entityId: `futurepedia:tool-${i}`,
-    title: `Tool ${i}`, url: `https://www.futurepedia.io/tool/tool-${i}`,
-    canonicalUrl: `https://www.futurepedia.io/tool/tool-${i}`,
-    rank: i + 1, metrics: {},
-    attributes: { pricingModel: PRICES[i % 4]!, category: CATEGORIES[i % 4]! },
-    capturedAt: "2026-08-20T00:00:00.000Z",
-  }));
-}
 
 function renderMatrix(r: EvalResult): void {
   const labels = ["BREAK", "CHANGE", "STALE", "UNKNOWN"] as const;
@@ -45,13 +31,21 @@ export function registerEval(program: Command): void {
     .action(async (opts: { source: string; set: string; json?: boolean }) => {
       const adapter = getAdapter(opts.source);
       const weights = loadWeights();
-      const baseline = syntheticBaseline();
-      const field = adapter.expectations.watchKeys[0] ?? "category";
+      const baseline = syntheticBaseline({
+        source: adapter.id,
+        entityType: adapter.entityType,
+        targetUrl: adapter.targetUrl,
+        expectations: adapter.expectations,
+      });
+      const field = adapter.expectations.watchKeys[0];
+      if (!field) {
+        throw new Error(
+          `"${opts.source}" has no watchKeys — attribute-mutation eval is not meaningful for this source. ` +
+          `Try futurepedia, github_trending, or tech_radar.`,
+        );
+      }
       const cases = buildFixtureCases(baseline, field);
-
-      const sets: EvalSet[] = opts.set === "all"
-        ? ["fixture-tuning", "fixture-heldout"]
-        : [opts.set as EvalSet];
+      const sets = resolveEvalSets(opts.set);
       const results = sets.map((s) => runEval(cases, adapter.expectations, s, weights));
 
       if (opts.json) { console.log(JSON.stringify({ weights: weights.version, results }, null, 2)); return; }

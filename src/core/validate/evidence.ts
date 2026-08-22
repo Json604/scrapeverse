@@ -100,7 +100,9 @@ export function buildEvidence(
 
     evidence.push({ field, coverage, breadth, maxConfusion, confusedWith, distinctCount: distinct });
 
-    if (breadth >= weights.breadthStructureMin) {
+    // Breadth-as-structure applies to watch keys (columns). Required metrics like HN
+    // points or GH stars move on most rows on a busy page — that is content, not a break.
+    if (exp.watchKeys.includes(field) && breadth >= weights.breadthStructureMin) {
       violations.push(
         `field "${field}" changed on ${(breadth * 100).toFixed(0)}% of persisting rows — ` +
         `universal change indicates structure, not content`,

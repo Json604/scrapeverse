@@ -5,10 +5,92 @@
  * and keeps `fixture` / `wayback` / `live-shadow` sets SEPARATE. Pooling them would let a
  * self-tuned fixture score inflate the headline number.
  */
-import type { NormalizedRecord, SourceExpectations, Baseline, Snapshot, TransportMeta } from "../types.ts";
+import type {
+  NormalizedRecord, SourceExpectations, Baseline, Snapshot, TransportMeta,
+  SourceId, EntityType, Metric, AttributeValue,
+} from "../types.ts";
 import { validate } from "../validate/index.ts";
 import { DEFAULT_WEIGHTS, type Weights } from "../config.ts";
 import { TUNING, HELD_OUT, type MutationOperator, type TruthLabel } from "../fixtures/mutate.ts";
+
+const BUILTIN_FIELDS = new Set(["title", "url", "canonicalUrl", "rank"]);
+const ATTR_VOCAB: Record<string, string[]> = {
+  pricingModel: ["Free", "Freemium", "Paid", "Free Trial"],
+  category: ["Image", "Chat", "Code", "Audio"],
+  language: ["Python", "TypeScript", "Rust", "Go"],
+  description: ["alpha", "beta", "gamma", "delta"],
+  tagline: ["one", "two", "three", "four"],
+  topics: ["AI", "DevTools", "Productivity", "Data"],
+  task: ["text-generation", "image-classification", "fill-mask", "translation"],
+  domain: ["example.com", "news.org", "blog.dev", "docs.io"],
+  ring: ["Adopt", "Trial", "Assess", "Hold"],
+  quadrant: ["languages", "tools", "platforms", "techniques"],
+};
+
+export const SHIPPED_EVAL_SETS: EvalSet[] = ["fixture-tuning", "fixture-heldout"];
+
+export function resolveEvalSets(set: string): EvalSet[] {
+  if (set === "all") return [...SHIPPED_EVAL_SETS];
+  if (set === "wayback" || set === "live-shadow") {
+    throw new Error(
+      `set "${set}" is not shipped. Fixture sets are the regression suite; ` +
+      `wayback / live-shadow need labeled captures.`,
+    );
+  }
+  if ((SHIPPED_EVAL_SETS as string[]).includes(set)) return [set as EvalSet];
+  throw new Error(`unknown set "${set}". use: all, fixture-tuning, fixture-heldout`);
+}
+
+/**
+ * Build records that satisfy `expectations` for the source under evaluation.
+ * A futurepedia-shaped synthetic run against github_trending requiredFields (stars, starsToday)
+ * classifies every CHANGE operator as BREAK — coverage collapse on missing metrics.
+ */
+export function syntheticBaseline(opts: {
+  source: SourceId;
+  entityType: EntityType;
+  targetUrl: string;
+  expectations: SourceExpectations;
+  n?: number;
+}): NormalizedRecord[] {
+  const exp = opts.expectations;
+  const n = opts.n ?? Math.max(exp.rowRange[0], Math.min(24, exp.rowRange[1]));
+  const metricKeys = Object.keys(exp.metricDeltaFloors);
+  const attrKeys = [...new Set([...exp.watchKeys, ...exp.requiredFields])]
+    .filter((k) => !BUILTIN_FIELDS.has(k) && !metricKeys.includes(k));
+
+  let origin = "https://example.com";
+  try { origin = new URL(opts.targetUrl).origin; } catch { /* keep fallback */ }
+
+  return Array.from({ length: n }, (_, i) => {
+    const nativeId = `item-${i}`;
+    const url = `${origin}/${nativeId}`;
+    const metrics: Record<string, Metric> = {};
+    for (const [mi, k] of metricKeys.entries()) {
+      // Offset per metric so two required metrics never share values. Identical `stars`
+      // and `starsToday` made fieldConfusion fire "selector drift" on every CHANGE case.
+      metrics[k] = { name: k, value: (i + 1) * 10 + mi * 1000, unit: "total" };
+    }
+    const attributes: Record<string, AttributeValue> = {};
+    for (const k of attrKeys) {
+      const vocab = ATTR_VOCAB[k] ?? ["A", "B", "C", "D"];
+      attributes[k] = vocab[i % vocab.length]!;
+    }
+    return {
+      source: opts.source,
+      entityType: opts.entityType,
+      nativeId,
+      entityId: `${opts.source}:${nativeId}`,
+      title: `Item ${i}`,
+      url,
+      canonicalUrl: url,
+      rank: i + 1,
+      metrics,
+      attributes,
+      capturedAt: "2026-08-20T00:00:00.000Z",
+    };
+  });
+}
 
 export type EvalSet = "fixture-tuning" | "fixture-heldout" | "wayback" | "live-shadow";
 export type Predicted = "BREAK" | "CHANGE" | "STALE" | "UNKNOWN";

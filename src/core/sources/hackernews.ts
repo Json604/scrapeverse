@@ -23,7 +23,9 @@ export const hackernews: SourceAdapter = {
     ],
   },
   expectations: {
-    rowRange: [28, 30],
+    // Studio often follows "More" and returns ~60 unique stories. The front page is 30;
+    // the historical floor learns the live size after calibration.
+    rowRange: [20, 90],
     watchKeys: ["domain"],
     requiredFields: ["title", "points"],
     presenceCanaries: ["title", "points"],
@@ -52,8 +54,11 @@ export const hackernews: SourceAdapter = {
       const metrics: Record<string, Metric> = {};
       if (points !== null) metrics["points"] = { name: "points", value: points, unit: "total" };
       if (comments !== null) metrics["comments"] = { name: "comments", value: comments, unit: "total" };
-      const raw = str(pick(row, "url", "link")) ?? `https://news.ycombinator.com/item?id=${nativeId}`;
-      const url = normalizeUrl(raw, TARGET);
+      const outbound = str(pick(row, "url", "link"));
+      const url = outbound
+        ? normalizeUrl(outbound, TARGET)
+        : `https://news.ycombinator.com/item?id=${nativeId}`;
+      const canonicalUrl = `https://news.ycombinator.com/item?id=${nativeId}`;
       let domain: string | null = null;
       try { domain = new URL(url).host.replace(/^www\./, ""); } catch { /* keep null */ }
       out.push({
@@ -61,7 +66,7 @@ export const hackernews: SourceAdapter = {
         entityId: `hackernews:${nativeId}`,
         // NOTE: `author` is deliberately NOT captured — hackathon rules forbid personal data.
         title: str(pick(row, "title", "headline")) ?? `item ${nativeId}`,
-        url, canonicalUrl: url, rank, metrics,
+        url, canonicalUrl, rank, metrics,
         attributes: { domain },
         capturedAt,
       });

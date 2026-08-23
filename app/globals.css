@@ -438,6 +438,11 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--orange); outlin
   transform: translate3d(-50%, -100%, 0) scale(1);
   transition-delay: 0s;
 }
+.context-tip__bubble[data-placement="below"] {
+  transform: translate3d(-50%, -4px, 0) scale(0.97);
+  transform-origin: top center;
+}
+.context-tip__bubble[data-placement="below"][data-open="true"] { transform: translate3d(-50%, 0, 0) scale(1); }
 .context-tip:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
 
 .explorer-shell { position: relative; width: min(1500px, calc(100% - 40px)); min-height: 100svh; margin: 0 auto; padding: 18px 0 56px; }
@@ -498,10 +503,39 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--orange); outlin
 .explorer-event__change > strong { font-size: 13px !important; }
 .explorer-event > svg, .ranking-list a > svg { justify-self: end; }
 .explorer-empty { padding: 80px 28px; color: var(--text-secondary); font-size: 14px; text-align: center; }
-.ranking-grid { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.ranking-panel > header { display: flex; justify-content: space-between; align-items: center; min-height: 86px; padding: 22px 24px; border-bottom: 1px solid var(--line); }
+.ranking-grid {
+  display: grid;
+  grid-template-areas:
+    "hn gh ss"
+    "hn ti py";
+  grid-template-columns: minmax(0, 1.18fr) minmax(0, 0.92fr) minmax(0, 0.82fr);
+  grid-template-rows: repeat(2, clamp(280px, 28vw, 360px));
+  gap: 14px;
+}
+.ranking-panel { display: flex; min-width: 0; min-height: 0; flex-direction: column; }
+.ranking-panel--hackernews { grid-area: hn; background: linear-gradient(180deg, rgb(var(--text-secondary-rgb) / 0.08), var(--surface) 42%); }
+.ranking-panel--github_trending { grid-area: gh; }
+.ranking-panel--stackshare { grid-area: ss; background: rgb(var(--page-rgb) / 0.72); }
+.ranking-panel--tiobe { grid-area: ti; background: rgb(var(--page-rgb) / 0.56); }
+.ranking-panel--pypl { grid-area: py; }
+.ranking-panel > header { display: flex; flex: 0 0 auto; justify-content: space-between; align-items: flex-start; min-height: 96px; padding: 24px; border-bottom: 1px solid var(--line); }
 .ranking-panel h2 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.025em; }
+.ranking-panel--hackernews > header { min-height: 124px; padding: 28px; }
+.ranking-panel--hackernews h2 { max-width: 9ch; font-size: clamp(32px, 3vw, 44px); letter-spacing: -0.045em; line-height: 0.98; }
 .ranking-panel header span { color: var(--text-secondary); font: 10px var(--font-mono); }
+.ranking-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: auto;
+  scrollbar-color: rgb(var(--text-secondary-rgb) / 0.62) transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+.ranking-list::-webkit-scrollbar { width: 9px; }
+.ranking-list::-webkit-scrollbar-track { background: transparent; }
+.ranking-list::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 999px; background: rgb(var(--text-secondary-rgb) / 0.58); background-clip: padding-box; }
 .ranking-list a { display: grid; grid-template-columns: 44px minmax(0, 1fr) 24px; gap: 14px; align-items: center; min-height: 76px; padding: 14px 20px; border-bottom: 1px solid var(--line); transition: background-color 140ms ease; }
 .ranking-list a:last-child { border-bottom: 0; }
 .ranking-list a > span { color: var(--text-secondary); font: 11px var(--font-mono); }
@@ -537,6 +571,14 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--orange); outlin
   .sources-panel > .panel-heading, .sources-panel > .trust-note { grid-column: 1 / -1; }
   .source-list { display: contents; }
   .source-row { border-right: 1px solid var(--line); }
+  .ranking-grid {
+    grid-template-areas:
+      "hn gh"
+      "hn ss"
+      "ti py";
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(3, minmax(280px, 34svh));
+  }
 }
 
 @media (max-width: 880px) {
@@ -609,7 +651,9 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--orange); outlin
   .explorer-intro p { font-size: 15px; }
   .explorer-event { grid-template-columns: 84px minmax(0, 1fr) 20px; gap: 12px; padding: 16px; }
   .explorer-event > div:nth-of-type(3) { display: none; }
-  .ranking-grid { grid-template-columns: 1fr; }
+  .ranking-grid { display: flex; flex-direction: column; }
+  .ranking-panel { height: min(440px, 70svh); min-height: 340px; }
+  .ranking-panel--hackernews { height: min(560px, 78svh); }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -18,9 +18,9 @@ export default async function RankingsPage() {
       </section>
       <div className="ranking-grid">
         {data.rankings.map((ranking) => (
-          <section className="ranking-panel" key={ranking.sourceId}>
+          <section className={`ranking-panel ranking-panel--${ranking.sourceId}`} key={ranking.sourceId}>
             <header><h2>{ranking.source}</h2><span>{ranking.items.length} rows</span></header>
-            <div className="ranking-list">
+            <div className="ranking-list" aria-label={`${ranking.source} rankings`} tabIndex={0}>
               {ranking.items.map((item) => (
                 <a href={item.url} target="_blank" rel="noopener noreferrer" key={`${ranking.sourceId}-${item.rank}-${item.title}`} aria-label={`Open ${item.title} at its source`}>
                   <span>#{item.rank}</span>

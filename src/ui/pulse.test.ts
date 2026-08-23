@@ -89,11 +89,14 @@ test("the print-theme hero uses the optimized project artwork", () => {
 
 test("the hero uses a small eagerly preloaded raster for its first paint", () => {
   const dashboard = readFileSync(new URL("../../app/pulse-dashboard.tsx", import.meta.url), "utf8");
+  const nextConfig = readFileSync(new URL("../../next.config.mjs", import.meta.url), "utf8");
   const artwork = statSync(new URL("../../public/driftwatch-eye-hero-v1.webp", import.meta.url));
 
   assert.ok(artwork.size < 500_000);
   assert.match(dashboard, /fetchPriority="high"/);
   assert.match(dashboard, /loading="eager"/);
+  assert.match(nextConfig, /source:\s*"\/"/);
+  assert.match(nextConfig, /<\/driftwatch-eye-hero-v1\.webp>; rel=preload; as=image; type=image\/webp; fetchpriority=high/);
 });
 
 test("the hero uses Inter, borderless glass, and isolated foreground wind", () => {
@@ -310,6 +313,32 @@ test("domain terms expose fast black contextual tooltips", () => {
   assert.match(styles, /\.context-tip__bubble\s*{[^}]*background:\s*var\(--text-primary\)/);
   assert.match(styles, /\.context-tip__bubble\s*{[^}]*transition:[^;]*125ms var\(--ease-out\)/);
   assert.match(styles, /\.context-tip__bubble\[data-open="true"\]/);
+});
+
+test("contextual tooltips clamp to the viewport and flip below crowded anchors", () => {
+  const tooltip = readFileSync(new URL("../../app/context-tip.tsx", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(tooltip, /useLayoutEffect/);
+  assert.match(tooltip, /getBoundingClientRect/);
+  assert.match(tooltip, /Math\.min/);
+  assert.match(tooltip, /Math\.max/);
+  assert.match(tooltip, /innerWidth/);
+  assert.match(tooltip, /data-placement/);
+  assert.match(styles, /\.context-tip__bubble\[data-placement="below"\]/);
+});
+
+test("rankings use a responsive bento with independently scrollable live lists", () => {
+  const rankings = readFileSync(new URL("../../app/rankings/page.tsx", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(rankings, /ranking-panel--\$\{ranking\.sourceId\}/);
+  assert.match(rankings, /aria-label=\{`\$\{ranking\.source\} rankings`\}/);
+  assert.match(rankings, /tabIndex=\{0\}/);
+  assert.match(styles, /\.ranking-grid\s*{[^}]*grid-template-areas:/);
+  assert.match(styles, /\.ranking-panel--hackernews\s*{[^}]*grid-area:\s*hn/);
+  assert.match(styles, /\.ranking-list\s*{[^}]*overflow-y:\s*auto/);
+  assert.match(styles, /\.ranking-list\s*{[^}]*overscroll-behavior-y:\s*auto/);
 });
 
 test("ranking separators use quiet structural lines instead of black rules", () => {

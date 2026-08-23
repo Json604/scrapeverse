@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="d.">
+  <rect width="32" height="32" fill="#ffffff"/>
+  <mask id="bowl">
+    <rect width="32" height="32" fill="#ffffff"/>
+    <circle cx="13.1" cy="19.55" r="4.05" fill="#000000"/>
+  </mask>
+  <circle cx="13.1" cy="19.55" r="7.35" fill="#111111" mask="url(#bowl)"/>
+  <rect x="16.2" y="5.2" width="4.2" height="21.7" fill="#111111"/>
+  <rect x="22.2" y="22.9" width="3.7" height="3.7" fill="#111111"/>
+</svg>

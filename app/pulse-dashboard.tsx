@@ -1,14 +1,16 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   ArrowRight,
   ArrowUpRight,
   CircleAlert,
   CircleCheck,
   CloudOff,
+  Menu,
   RefreshCw,
   SearchX,
+  X,
 } from "lucide-react";
 import { LiquidGlass } from "./liquid-glass";
 import { ContextTip, EVENT_TERM_HELP, STATUS_TERM_HELP } from "./context-tip.tsx";
@@ -28,6 +30,19 @@ const filterLabels: Record<PulseFilter, string> = {
   moved: "Moved",
   changed: "Attributes",
 };
+
+interface MobileNavigationRuntime {
+  document: {
+    addEventListener(type: "pointerdown", listener: (event: { target: unknown }) => void): void;
+    addEventListener(type: "keydown", listener: (event: { key: string }) => void): void;
+    removeEventListener(type: "pointerdown", listener: (event: { target: unknown }) => void): void;
+    removeEventListener(type: "keydown", listener: (event: { key: string }) => void): void;
+  };
+}
+
+interface MobileNavigationElement {
+  contains(target: unknown): boolean;
+}
 
 function EventRow({ event, featured = false }: { event: PulseEvent; featured?: boolean }) {
   const kindLabel = event.kind === "changed" ? "Attribute" : event.kind;
@@ -73,6 +88,55 @@ function SourceMenu({ sources, followed, onToggle }: { sources: readonly Dashboa
         })}
       </div>
     </details>
+  );
+}
+
+function MobileNavigation() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const runtime = globalThis as unknown as MobileNavigationRuntime;
+
+    function closeOnOutsidePress(event: { target: unknown }) {
+      const menu = mobileMenuRef.current as unknown as MobileNavigationElement | null;
+      if (!menu?.contains(event.target)) setMobileMenuOpen(false);
+    }
+
+    function closeOnEscape(event: { key: string }) {
+      if (event.key === "Escape") setMobileMenuOpen(false);
+    }
+
+    runtime.document.addEventListener("pointerdown", closeOnOutsidePress);
+    runtime.document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      runtime.document.removeEventListener("pointerdown", closeOnOutsidePress);
+      runtime.document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [mobileMenuOpen]);
+
+  return (
+    <div className="mobile-nav" data-open={mobileMenuOpen} ref={mobileMenuRef}>
+      <button
+        className="mobile-nav__trigger pressable glass-button"
+        type="button"
+        aria-label={mobileMenuOpen ? "Close navigation" : "Open navigation"}
+        aria-expanded={mobileMenuOpen}
+        aria-controls="mobile-navigation"
+        onClick={() => setMobileMenuOpen((open) => !open)}
+      >
+        <LiquidGlass tone="dark">
+          <Menu className="mobile-nav__icon mobile-nav__icon--menu" size={19} strokeWidth={2} aria-hidden="true" />
+          <X className="mobile-nav__icon mobile-nav__icon--close" size={19} strokeWidth={2} aria-hidden="true" />
+        </LiquidGlass>
+      </button>
+      <div className="mobile-nav__popover" id="mobile-navigation" role="navigation" aria-label="Mobile navigation" data-open={mobileMenuOpen}>
+        <a href="/changelog" onClick={() => setMobileMenuOpen(false)}>Changes <ArrowUpRight size={15} aria-hidden="true" /></a>
+        <a href="/rankings" onClick={() => setMobileMenuOpen(false)}>Rankings <ArrowUpRight size={15} aria-hidden="true" /></a>
+        <a href="#sources" onClick={() => setMobileMenuOpen(false)}>Sources <ArrowRight size={15} aria-hidden="true" /></a>
+      </div>
+    </div>
   );
 }
 
@@ -194,6 +258,7 @@ export function PulseDashboard({ initialData, initialError = null }: { initialDa
             <SourceMenu sources={data.sources} followed={followedSources} onToggle={toggleSource} />
           </nav>
           <div className="topbar__actions">
+            <MobileNavigation />
             <button className={`refresh-button pressable glass-button ${refreshing ? "is-refreshing" : ""}`} onClick={refreshSnapshot}>
               <LiquidGlass tone="dark"><RefreshCw className="refresh-glyph" size={16} strokeWidth={2} aria-hidden="true" /><span>{refreshing ? "Checking..." : "Check now"}</span></LiquidGlass>
             </button>

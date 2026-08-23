@@ -8,6 +8,7 @@ import {
   summarizePulse,
   type PulseEvent,
 } from "./pulse.ts";
+import { fitTooltipPosition } from "./tooltip-position.ts";
 
 const events: PulseEvent[] = [
   {
@@ -319,13 +320,23 @@ test("contextual tooltips clamp to the viewport and flip below crowded anchors",
   const tooltip = readFileSync(new URL("../../app/context-tip.tsx", import.meta.url), "utf8");
   const styles = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
 
-  assert.match(tooltip, /useLayoutEffect/);
   assert.match(tooltip, /getBoundingClientRect/);
-  assert.match(tooltip, /Math\.min/);
-  assert.match(tooltip, /Math\.max/);
   assert.match(tooltip, /innerWidth/);
   assert.match(tooltip, /data-placement/);
+  assert.match(styles, /\.context-tip__bubble\s*{[^}]*width:\s*min\(260px, calc\(100vw - 24px\)\)/);
   assert.match(styles, /\.context-tip__bubble\[data-placement="below"\]/);
+});
+
+test("a changelog tooltip stays readable beside the left viewport edge", () => {
+  const position = fitTooltipPosition({ top: 196, bottom: 222, left: 94, width: 89 }, 514);
+
+  assert.deepEqual(position, { left: 142, top: 188, placement: "above" });
+});
+
+test("a tooltip flips below when the anchor is too close to the top edge", () => {
+  const position = fitTooltipPosition({ top: 48, bottom: 74, left: 16, width: 80 }, 320);
+
+  assert.deepEqual(position, { left: 142, top: 82, placement: "below" });
 });
 
 test("rankings use a responsive bento with independently scrollable live lists", () => {
@@ -395,4 +406,22 @@ test("the header routes to real destinations and exposes sources as a status pop
   assert.doesNotMatch(dashboard, /navigationItems|activeNavigation|topbar__selection/);
   assert.match(styles, /\.source-menu__popover\s*{[^}]*backdrop-filter:\s*blur\(/);
   assert.match(styles, /\.source-menu__row\s*{/);
+});
+
+test("the dashboard keeps primary navigation reachable through a mobile menu", () => {
+  const dashboard = readFileSync(new URL("../../app/pulse-dashboard.tsx", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+  const mobileBreakpoint = styles.match(/@media \(max-width: 880px\)\s*{([\s\S]*?)(?=@media \(max-width: 620px\))/)?.[1] ?? "";
+
+  assert.match(dashboard, /Menu,/);
+  assert.match(dashboard, /X,/);
+  assert.match(dashboard, /aria-expanded=\{mobileMenuOpen\}/);
+  assert.match(dashboard, /className="mobile-nav__popover"/);
+  assert.match(dashboard, /href="\/changelog"/);
+  assert.match(dashboard, /href="\/rankings"/);
+  assert.match(dashboard, /href="#sources"/);
+  assert.match(styles, /\.mobile-nav\s*{[^}]*display:\s*none/);
+  assert.match(mobileBreakpoint, /\.mobile-nav\s*{[^}]*display:\s*block/);
+  assert.match(styles, /\.mobile-nav__popover\s*{[^}]*transition:[^;]*180ms var\(--ease-out\)/);
+  assert.match(styles, /prefers-reduced-motion:[^)]+[\s\S]+\.mobile-nav__popover/);
 });

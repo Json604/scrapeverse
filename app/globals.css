@@ -273,14 +273,21 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--orange); outlin
 
 .event-columns, .event-row { display: grid; grid-template-columns: 120px minmax(230px, 1.45fr) 125px 142px 44px; gap: 14px; align-items: center; }
 .event-columns { min-height: 44px; padding: 0 16px 0 24px; border-bottom: 1px solid var(--ink); background: var(--ink); color: var(--paper-light); font: 9px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.event-list {
+  max-height: clamp(460px, 68vh, 720px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--ink) transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+.event-list::-webkit-scrollbar { width: 10px; }
+.event-list::-webkit-scrollbar-track { background: transparent; }
+.event-list::-webkit-scrollbar-thumb { border: 3px solid var(--surface); border-radius: 999px; background: var(--ink); }
+.event-list:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
 .event-row { position: relative; min-height: 108px; padding: 17px 14px 17px 24px; border-bottom: 1px solid var(--line); transition: background-color 140ms ease; }
 .event-row:last-child { border-bottom: 0; }
 .event-row--featured { background: rgb(var(--text-secondary-rgb) / 0.1); }
-.event-row__rail { position: absolute; top: 18px; bottom: 18px; left: 0; width: 5px; border-radius: 0 3px 3px 0; }
-.event-row__rail--mint { background: var(--olive); }
-.event-row__rail--coral { background: var(--orange-dark); }
-.event-row__rail--sky { background: var(--ink-bright); }
-.event-row__rail--gold { background: var(--olive-dark); }
 .event-row__kind { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; }
 .event-row__kind time { color: var(--ink-soft); font: 10px var(--font-mono); }
 .event-token { display: inline-flex; align-items: center; min-height: 26px; padding: 0 8px; border: 1px solid var(--ink); border-radius: 4px; font: 8px var(--font-mono); font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
@@ -302,6 +309,8 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--orange); outlin
 .row-action .liquid-glass { height: 44px; }
 .ascii-arrow { font: 14px var(--font-mono); }
 .feed-footer { display: flex; justify-content: space-between; align-items: center; min-height: 68px; padding: 0 18px 0 24px; border-top: 2px solid var(--ink); background: rgb(var(--text-secondary-rgb) / 0.07); font: 10px var(--font-mono); letter-spacing: 0.03em; }
+.scroll-indicator { display: inline-flex; gap: 7px; align-items: center; color: var(--ink-soft); font-size: 9px; font-weight: 750; letter-spacing: 0.1em; text-transform: uppercase; }
+.scroll-indicator .ascii-arrow { animation: scroll-nudge 1.8s var(--ease-move) infinite; will-change: transform; }
 .feed-footer button, .text-button { display: flex; align-items: center; min-height: 46px; border-radius: 999px; background: transparent; font-size: 10px; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; }
 .feed-footer button .liquid-glass, .text-button .liquid-glass { padding: 0 14px; }
 .feed-footer button .liquid-glass__content, .text-button .liquid-glass__content { gap: 8px; }
@@ -350,6 +359,11 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--orange); outlin
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+@keyframes scroll-nudge {
+  0%, 100% { transform: translate3d(0, -2px, 0); }
+  50% { transform: translate3d(0, 2px, 0); }
+}
 
 @media (hover: hover) and (pointer: fine) {
   .topbar nav a:hover:not(.is-active), .filter-bar button:hover:not(.is-active) { color: var(--text-secondary); }
@@ -426,4 +440,5 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--orange); outlin
   .pressable, .row-action, .topbar nav a, .topbar__selection, .filter-bar button, .filter-bar__selection, .follow-toggle, .follow-toggle__thumb, .event-row { transition: none; }
   .hero-art__wind { animation: none; }
   .refresh-button.is-refreshing .refresh-glyph { animation: none; }
+  .scroll-indicator .ascii-arrow { animation: none; }
 }

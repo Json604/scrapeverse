@@ -27,7 +27,6 @@ function EventRow({ event, featured = false }: { event: PulseEvent; featured?: b
 
   return (
     <article className={`event-row ${featured ? "event-row--featured" : ""}`}>
-      <div className={`event-row__rail event-row__rail--${event.accent ?? "sky"}`} />
       <div className="event-row__kind">
         <span className={`event-token event-token--${event.kind}`}>{kindLabel}</span><time>{event.observed}</time>
       </div>
@@ -194,11 +193,15 @@ export function PulseDashboard({ initialData, initialError = null }: { initialDa
               </div>
             </div>
             <div className="event-columns" aria-hidden="true"><span>Event / observed</span><span>Entity / evidence</span><span>Change</span><span>Source</span><span /></div>
-            <div className="event-list">
+            <div className="event-list" role="region" aria-label="Change event feed" tabIndex={0}>
               {visibleEvents.map((event, index) => <EventRow key={event.id} event={event} featured={filter === "all" && index === 0} />)}
               {visibleEvents.length === 0 ? <div className="empty-state"><span>[ ø ]</span><h3>No followed source matches this view.</h3><p>Turn a source back on, or choose another event type.</p></div> : null}
             </div>
-            <div className="feed-footer"><span>Showing {visibleEvents.length} / {summary.total} meaningful changes</span><button className="pressable glass-button"><LiquidGlass>Open full changelog <AsciiArrow /></LiquidGlass></button></div>
+            <div className="feed-footer">
+              <span>Showing {visibleEvents.length} / {summary.total} meaningful changes</span>
+              {visibleEvents.length > 4 ? <span className="scroll-indicator" aria-hidden="true">Scroll <AsciiArrow direction="down" /></span> : null}
+              <button className="pressable glass-button"><LiquidGlass>Open full changelog <AsciiArrow /></LiquidGlass></button>
+            </div>
           </section>
           <SourceTape sources={data.sources} followed={followedSources} onToggle={toggleSource} />
         </div>

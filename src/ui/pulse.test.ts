@@ -219,3 +219,16 @@ test("the dashboard is server-seeded and refreshes from the live dashboard API",
   assert.match(page, /getDashboardData/);
   assert.match(page, /dynamic = "force-dynamic"/);
 });
+
+test("the change feed exposes scrolling without decorative row rails", () => {
+  const dashboard = readFileSync(new URL("../../app/pulse-dashboard.tsx", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(dashboard, /className="event-list" role="region" aria-label="Change event feed" tabIndex=\{0\}/);
+  assert.match(dashboard, /className="scroll-indicator"/);
+  assert.match(styles, /\.event-list\s*{[^}]*overflow-y:\s*auto/);
+  assert.match(styles, /\.event-list::\-webkit-scrollbar-thumb/);
+  assert.doesNotMatch(dashboard, /event-row__rail/);
+  assert.doesNotMatch(styles, /\.event-row__rail/);
+  assert.match(styles, /prefers-reduced-motion:[^)]+[\s\S]+\.scroll-indicator \.ascii-arrow\s*{\s*animation:\s*none/);
+});

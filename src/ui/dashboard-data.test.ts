@@ -83,8 +83,8 @@ function event(changeType: ChangeEvent["changeType"], source: ChangeEvent["sourc
 test("buildDashboardData projects live events without inventing unsupported LEFT rows", () => {
   const data = buildDashboardData({
     events: [event("ENTERED"), event("RANK_UP", "github_trending"), event("LEFT")],
-    latestSnapshots: [snapshot("hackernews", "healthy", [record("hackernews", "HN story")])],
-    trustedSnapshots: [snapshot("hackernews", "healthy", [record("hackernews", "HN story")])],
+    latestSnapshots: [snapshot("hackernews", "healthy", [record("hackernews", "entity")])],
+    trustedSnapshots: [snapshot("hackernews", "healthy", [record("hackernews", "entity")])],
     eventCountsBySnapshot: { "snap-hackernews-healthy": 2 },
   }, new Date("2026-08-23T14:00:00.000Z"));
 
@@ -92,6 +92,8 @@ test("buildDashboardData projects live events without inventing unsupported LEFT
   assert.equal(data.events[0]?.entity, "Real entity");
   assert.equal(data.events[0]?.source, "Hacker News");
   assert.equal(data.events[0]?.observed, "1 hr ago");
+  assert.equal(data.events[0]?.entityId, "hackernews:entity");
+  assert.equal(data.events[0]?.url, "https://example.com");
 });
 
 test("buildDashboardData uses latest health for trust and latest healthy records for boards", () => {
@@ -106,7 +108,11 @@ test("buildDashboardData uses latest health for trust and latest healthy records
 
   assert.equal(data.sources.find((source) => source.id === "github_trending")?.status, "broken");
   assert.equal(data.boards.find((board) => board.sourceId === "github_trending")?.title, "openai/codex");
+  assert.equal(data.boards.find((board) => board.sourceId === "github_trending")?.source, "GitHub Trending");
+  assert.equal(data.boards.find((board) => board.sourceId === "github_trending")?.url, "https://example.com");
   assert.match(data.boards.find((board) => board.sourceId === "github_trending")?.detail ?? "", /Rust/);
+  assert.equal(data.rankings[0]?.items[0]?.title, "openai/codex");
+  assert.equal(data.rankings[0]?.items[0]?.url, "https://example.com");
 });
 
 test("a healthy source with no latest-snapshot events is explicitly quiet", () => {

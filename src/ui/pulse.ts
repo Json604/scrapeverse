@@ -1,12 +1,14 @@
 export type PulseEventKind = "entered" | "moved" | "changed";
 export type PulseFilter = "all" | PulseEventKind;
 
-export const driftwatchHeroArtwork = "/driftwatch-eye-hero-v1.svg";
+export const driftwatchHeroArtwork = "/driftwatch-eye-hero-v1.webp";
 
 export interface PulseEvent {
   id: string;
+  entityId: string;
   kind: PulseEventKind;
   entity: string;
+  url: string;
   sourceId: string;
   source: string;
   detail: string;

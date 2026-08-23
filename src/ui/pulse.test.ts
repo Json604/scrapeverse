@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import test from "node:test";
 import {
   buildAsciiSourceMap,
@@ -12,8 +12,10 @@ import {
 const events: PulseEvent[] = [
   {
     id: "entered",
+    entityId: "github_trending:openai/codex",
     kind: "entered",
     entity: "openai/codex",
+    url: "https://github.com/openai/codex",
     sourceId: "github_trending",
     source: "GitHub Trending",
     detail: "Entered the list",
@@ -24,8 +26,10 @@ const events: PulseEvent[] = [
   },
   {
     id: "moved",
+    entityId: "hackernews:show-hn-driftwatch",
     kind: "moved",
     entity: "Show HN: Driftwatch",
+    url: "https://news.ycombinator.com/",
     sourceId: "hackernews",
     source: "Hacker News",
     detail: "Climbed 14 places",
@@ -36,8 +40,10 @@ const events: PulseEvent[] = [
   },
   {
     id: "changed",
+    entityId: "pypl:python",
     kind: "changed",
     entity: "Python",
+    url: "https://pypl.github.io/PYPL.html",
     sourceId: "pypl",
     source: "PYPL",
     detail: "Share changed",
@@ -77,8 +83,17 @@ test("buildAsciiSourceMap connects every watched list to one entity changelog", 
   assert.match(map, /things, not pages/);
 });
 
-test("the print-theme hero uses the project-bound SVG artwork", () => {
-  assert.equal(driftwatchHeroArtwork, "/driftwatch-eye-hero-v1.svg");
+test("the print-theme hero uses the optimized project artwork", () => {
+  assert.equal(driftwatchHeroArtwork, "/driftwatch-eye-hero-v1.webp");
+});
+
+test("the hero uses a small eagerly preloaded raster for its first paint", () => {
+  const dashboard = readFileSync(new URL("../../app/pulse-dashboard.tsx", import.meta.url), "utf8");
+  const artwork = statSync(new URL("../../public/driftwatch-eye-hero-v1.webp", import.meta.url));
+
+  assert.ok(artwork.size < 500_000);
+  assert.match(dashboard, /fetchPriority="high"/);
+  assert.match(dashboard, /loading="eager"/);
 });
 
 test("the hero uses Inter, borderless glass, and isolated foreground wind", () => {
@@ -124,7 +139,7 @@ test("the hero keeps only essential chrome and uses a faster smooth wind cycle",
   const wind = styles.match(/\.hero-art__wind\s*{([^}]*)}/)?.[1] ?? "";
 
   assert.doesNotMatch(hero, /<Mark|preview|account-button|status-pill|hero__proof/);
-  assert.match(hero, />driftwatch<\/span>/);
+  assert.match(dashboard, />driftwatch<\/span>/);
   assert.match(navLink, /display:\s*grid/);
   assert.match(navLink, /place-items:\s*center/);
   assert.match(wind, /animation:\s*grass-wind 1\.45s var\(--ease-wind\) infinite alternate/);
@@ -220,15 +235,122 @@ test("the dashboard is server-seeded and refreshes from the live dashboard API",
   assert.match(page, /dynamic = "force-dynamic"/);
 });
 
-test("the change feed exposes scrolling without decorative row rails", () => {
+test("the change feed exposes a real scrollbar without decorative prompts or row rails", () => {
   const dashboard = readFileSync(new URL("../../app/pulse-dashboard.tsx", import.meta.url), "utf8");
   const styles = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+  const eventList = styles.match(/\.event-list\s*{([^}]*)}/)?.[1] ?? "";
 
   assert.match(dashboard, /className="event-list" role="region" aria-label="Change event feed" tabIndex=\{0\}/);
-  assert.match(dashboard, /className="scroll-indicator"/);
-  assert.match(styles, /\.event-list\s*{[^}]*overflow-y:\s*auto/);
+  assert.match(eventList, /overflow-y:\s*auto/);
+  assert.match(eventList, /overscroll-behavior-y:\s*auto/);
+  assert.doesNotMatch(eventList, /overscroll-behavior:\s*contain/);
   assert.match(styles, /\.event-list::\-webkit-scrollbar-thumb/);
+  assert.doesNotMatch(dashboard, /scroll-indicator|>Scroll</i);
+  assert.doesNotMatch(styles, /\.scroll-indicator|scroll-nudge/);
   assert.doesNotMatch(dashboard, /event-row__rail/);
   assert.doesNotMatch(styles, /\.event-row__rail/);
-  assert.match(styles, /prefers-reduced-motion:[^)]+[\s\S]+\.scroll-indicator \.ascii-arrow\s*{\s*animation:\s*none/);
+});
+
+test("actions use packaged icons and the board explains that it shows list leaders", () => {
+  const dashboard = readFileSync(new URL("../../app/pulse-dashboard.tsx", import.meta.url), "utf8");
+
+  assert.match(dashboard, /from "lucide-react"/);
+  assert.doesNotMatch(dashboard, /function AsciiArrow|className="ascii-arrow"|>↻<|>→<|\[ok\]|\[!\]|\[ ø \]/);
+  assert.match(dashboard, /What's #1 on each watched list\./);
+  assert.match(dashboard, /View all rankings/);
+  assert.match(dashboard, /\{board\.source\} · #\{board\.rank\}/);
+});
+
+test("every arrow action has a real destination and the header blurs its backdrop", () => {
+  const dashboard = readFileSync(new URL("../../app/pulse-dashboard.tsx", import.meta.url), "utf8");
+  const changelog = readFileSync(new URL("../../app/changelog/page.tsx", import.meta.url), "utf8");
+  const rankings = readFileSync(new URL("../../app/rankings/page.tsx", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+  const topbar = styles.match(/\.topbar\s*{([^}]*)}/)?.[1] ?? "";
+  const topbarGlass = styles.match(/\.topbar::before\s*{([^}]*)}/)?.[1] ?? "";
+
+  assert.match(dashboard, /href=\{event\.url\}/);
+  assert.match(dashboard, /target="_blank"/);
+  assert.match(dashboard, /rel="noopener noreferrer"/);
+  assert.match(dashboard, /href="\/changelog"/);
+  assert.match(dashboard, /href="\/rankings"/);
+  assert.match(changelog, /getDashboardData/);
+  assert.match(changelog, /getDashboardData\(300\)/);
+  assert.match(rankings, /getDashboardData/);
+  assert.match(topbar, /background:\s*transparent/);
+  assert.match(topbar, /backdrop-filter:\s*none/);
+  assert.match(topbarGlass, /backdrop-filter:\s*blur\(18px\)/);
+  assert.match(topbarGlass, /--surface-rgb\) \/ 0\.34/);
+  assert.match(styles, /\.topbar--compact::before\s*{\s*opacity:\s*1/);
+});
+
+test("all page headers use the shared collapse behavior", () => {
+  const dashboard = readFileSync(new URL("../../app/pulse-dashboard.tsx", import.meta.url), "utf8");
+  const explorerHeader = readFileSync(new URL("../../app/explorer-header.tsx", import.meta.url), "utf8");
+  const collapseHook = readFileSync(new URL("../../app/use-collapsing-header.ts", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(dashboard, /useCollapsingHeader/);
+  assert.match(explorerHeader, /useCollapsingHeader/);
+  assert.match(explorerHeader, /explorer-nav--compact/);
+  assert.match(explorerHeader, /header-collapse-sentinel/);
+  assert.match(collapseHook, /IntersectionObserver/);
+  assert.match(styles, /\.explorer-nav--compact\s*{/);
+});
+
+test("domain terms expose fast black contextual tooltips", () => {
+  const dashboard = readFileSync(new URL("../../app/pulse-dashboard.tsx", import.meta.url), "utf8");
+  const changelog = readFileSync(new URL("../../app/changelog/page.tsx", import.meta.url), "utf8");
+  const tooltip = readFileSync(new URL("../../app/context-tip.tsx", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(dashboard, /ContextTip/);
+  assert.match(changelog, /ContextTip/);
+  assert.match(tooltip, /role="tooltip"/);
+  assert.match(tooltip, /aria-describedby/);
+  assert.match(styles, /\.context-tip__bubble\s*{[^}]*background:\s*var\(--text-primary\)/);
+  assert.match(styles, /\.context-tip__bubble\s*{[^}]*transition:[^;]*125ms var\(--ease-out\)/);
+  assert.match(styles, /\.context-tip__bubble\[data-open="true"\]/);
+});
+
+test("ranking separators use quiet structural lines instead of black rules", () => {
+  const styles = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+  const panelHeading = styles.match(/\.panel-heading\s*{([^}]*)}/)?.[1] ?? "";
+  const boardCell = styles.match(/\.board-strip > div\s*{([^}]*)}/)?.[1] ?? "";
+
+  assert.match(panelHeading, /border-bottom:\s*1px solid var\(--line\)/);
+  assert.match(boardCell, /border-right:\s*1px solid var\(--line\)/);
+  assert.doesNotMatch(boardCell, /2px solid var\(--ink\)/);
+});
+
+test("rankings appear before the pulse and source panels", () => {
+  const dashboard = readFileSync(new URL("../../app/pulse-dashboard.tsx", import.meta.url), "utf8");
+  const rankingsPosition = dashboard.indexOf('<section className="content-panel boards"');
+  const pulsePosition = dashboard.indexOf('<div className="content-grid">');
+
+  assert.notEqual(rankingsPosition, -1);
+  assert.notEqual(pulsePosition, -1);
+  assert.ok(rankingsPosition < pulsePosition);
+});
+
+test("the header collapses into a centered compact island after leaving the hero top", () => {
+  const dashboard = readFileSync(new URL("../../app/pulse-dashboard.tsx", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+  const topbar = styles.match(/\.topbar\s*{([^}]*)}/)?.[1] ?? "";
+  const compact = styles.match(/\.topbar--compact\s*{([^}]*)}/)?.[1] ?? "";
+
+  assert.match(dashboard, /useCollapsingHeader/);
+  assert.match(dashboard, /header-collapse-sentinel/);
+  assert.match(dashboard, /topbar--compact/);
+  assert.doesNotMatch(dashboard, /addEventListener\(["']scroll/);
+  assert.match(topbar, /position:\s*fixed/);
+  assert.match(topbar, /left:\s*50%/);
+  assert.match(topbar, /border-radius:\s*0/);
+  assert.match(topbar, /transition:[^;]*280ms var\(--ease-move\)/);
+  assert.match(compact, /width:\s*min\(670px,/);
+  assert.match(compact, /border-radius:\s*999px/);
+  assert.match(styles, /\.topbar:not\(\.topbar--compact\) nav\s*{[^}]*background:\s*transparent/);
+  assert.match(styles, /\.topbar:not\(\.topbar--compact\) \.topbar__selection\s*{[^}]*opacity:\s*0/);
+  assert.match(styles, /\.topbar--compact \.brand/);
+  assert.match(styles, /prefers-reduced-motion:[^)]+[\s\S]+\.topbar, \.topbar::before, \.explorer-nav\s*{[^}]*transition:\s*none/);
 });

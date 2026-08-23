@@ -48,3 +48,22 @@ test("hydration cannot wash dark glass gray with a full-surface SVG light pass",
   assert.doesNotMatch(component, /feSpecularLighting/);
   assert.doesNotMatch(component, /feMergeNode in="specularRim"/);
 });
+
+test("button glass uses a neutral edge without a white highlight streak", () => {
+  const styles = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+  const rim = styles.match(/\.liquid-glass__rim\s*{([^}]*)}/)?.[1] ?? "";
+
+  assert.match(rim, /border:\s*1px solid rgb\(var\(--text-primary-rgb\)/);
+  assert.doesNotMatch(rim, /border:[^;]+--surface-rgb/);
+  assert.doesNotMatch(rim, /inset 0 1px 0 rgb\(var\(--surface-rgb\)/);
+  assert.doesNotMatch(styles, /\.liquid-glass__rim::after/);
+});
+
+test("dark glass has an edge-to-edge base beneath displaced refraction", () => {
+  const styles = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+  const darkGlass = styles.match(/\.liquid-glass\[data-tone="dark"\]\s*{([^}]*)}/)?.[1] ?? "";
+
+  assert.match(darkGlass, /background:\s*var\(--text-primary\)/);
+  assert.match(styles, /\.liquid-glass\s*{[^}]*overflow:\s*hidden/);
+  assert.match(styles, /\.liquid-glass\[data-tone="dark"\] \.liquid-glass__refraction/);
+});

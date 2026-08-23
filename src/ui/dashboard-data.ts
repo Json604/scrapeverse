@@ -16,23 +16,25 @@ export type DashboardAccent = "coral" | "mint" | "sky" | "gold";
 interface SourcePresentation {
   name: string;
   short: string;
+  url: string;
   cadence: "every 6h" | "monthly";
   eventCadence: "6h" | "monthly";
   accent: DashboardAccent;
 }
 
 const SOURCE_PRESENTATION: Record<DashboardSourceId, SourcePresentation> = {
-  hackernews: { name: "Hacker News", short: "HN", cadence: "every 6h", eventCadence: "6h", accent: "coral" },
-  github_trending: { name: "GitHub Trending", short: "GH", cadence: "every 6h", eventCadence: "6h", accent: "mint" },
-  stackshare: { name: "StackShare", short: "SS", cadence: "every 6h", eventCadence: "6h", accent: "sky" },
-  tiobe: { name: "TIOBE", short: "TI", cadence: "monthly", eventCadence: "monthly", accent: "gold" },
-  pypl: { name: "PYPL", short: "PY", cadence: "monthly", eventCadence: "monthly", accent: "sky" },
+  hackernews: { name: "Hacker News", short: "HN", url: "https://news.ycombinator.com/", cadence: "every 6h", eventCadence: "6h", accent: "coral" },
+  github_trending: { name: "GitHub Trending", short: "GH", url: "https://github.com/trending", cadence: "every 6h", eventCadence: "6h", accent: "mint" },
+  stackshare: { name: "StackShare", short: "SS", url: "https://stackshare.io/trending/tools", cadence: "every 6h", eventCadence: "6h", accent: "sky" },
+  tiobe: { name: "TIOBE", short: "TI", url: "https://www.tiobe.com/tiobe-index/", cadence: "monthly", eventCadence: "monthly", accent: "gold" },
+  pypl: { name: "PYPL", short: "PY", url: "https://pypl.github.io/PYPL.html", cadence: "monthly", eventCadence: "monthly", accent: "sky" },
 };
 
 export interface DashboardSource {
   id: DashboardSourceId;
   name: string;
   short: string;
+  url: string;
   cadence: SourcePresentation["cadence"];
   accent: DashboardAccent;
   status: Snapshot["status"] | "quiet" | "unavailable";
@@ -43,17 +45,33 @@ export interface DashboardSource {
 
 export interface DashboardBoardItem {
   sourceId: DashboardSourceId;
-  short: string;
+  source: string;
   rank: number;
   title: string;
   detail: string;
+  url: string;
   capturedAt: string;
+}
+
+export interface DashboardRankingItem {
+  rank: number;
+  title: string;
+  detail: string;
+  url: string;
+}
+
+export interface DashboardRankingGroup {
+  sourceId: DashboardSourceId;
+  source: string;
+  capturedAt: string;
+  items: DashboardRankingItem[];
 }
 
 export interface DashboardData {
   events: PulseEvent[];
   sources: DashboardSource[];
   boards: DashboardBoardItem[];
+  rankings: DashboardRankingGroup[];
   generatedAt: string;
 }
 
@@ -113,7 +131,7 @@ function eventContext(event: ChangeEvent) {
   return event.field ? words(event.field) : "trusted live snapshot";
 }
 
-function toPulseEvent(event: ChangeEvent, now: Date): PulseEvent | null {
+function toPulseEvent(event: ChangeEvent, now: Date, trustedUrl?: string): PulseEvent | null {
   if (!isDashboardSource(event.source) || event.channel !== "live") return null;
   const kind = eventKind(event.changeType);
   if (!kind) return null;
@@ -122,8 +140,10 @@ function toPulseEvent(event: ChangeEvent, now: Date): PulseEvent | null {
 
   return {
     id: event.eventId,
+    entityId: event.entityId,
     kind,
     entity: event.entityTitle,
+    url: trustedUrl ?? presentation.url,
     sourceId: event.source,
     source: presentation.name,
     detail: eventDetail(event),
@@ -163,14 +183,15 @@ function boardDetail(source: DashboardSourceId, record: NormalizedRecord) {
   return `${metric.value.toFixed(2)}% ${source === "tiobe" ? "rating" : "share"}`;
 }
 
-export function buildDashboardData(state: DashboardQueryState, now = new Date()): DashboardData {
+export function buildDashboardData(state: DashboardQueryState, now = new Date(), eventLimit = 50): DashboardData {
   const latestBySource = new Map(state.latestSnapshots.filter((snapshot) => isDashboardSource(snapshot.source)).map((snapshot) => [snapshot.source, snapshot]));
   const trustedBySource = new Map(state.trustedSnapshots.filter((snapshot) => isDashboardSource(snapshot.source)).map((snapshot) => [snapshot.source, snapshot]));
+  const trustedRecordsByEntity = new Map(state.trustedSnapshots.flatMap((snapshot) => snapshot.records).map((record) => [record.entityId, record]));
 
   const events = state.events
-    .map((event) => toPulseEvent(event, now))
+    .map((event) => toPulseEvent(event, now, trustedRecordsByEntity.get(event.entityId)?.canonicalUrl))
     .filter((event): event is PulseEvent => event !== null)
-    .slice(0, 50);
+    .slice(0, eventLimit);
 
   const sources = DASHBOARD_SOURCE_IDS.map((sourceId): DashboardSource => {
     const presentation = SOURCE_PRESENTATION[sourceId];
@@ -192,10 +213,24 @@ export function buildDashboardData(state: DashboardQueryState, now = new Date())
     const snapshot = trustedBySource.get(sourceId);
     const record = snapshot?.records.reduce<NormalizedRecord | null>((best, item) => !best || item.rank < best.rank ? item : best, null);
     if (!snapshot || !record) return [];
-    return [{ sourceId, short: SOURCE_PRESENTATION[sourceId].short, rank: record.rank, title: record.title, detail: boardDetail(sourceId, record), capturedAt: snapshot.capturedAt }];
+    return [{ sourceId, source: SOURCE_PRESENTATION[sourceId].name, rank: record.rank, title: record.title, detail: boardDetail(sourceId, record), url: record.canonicalUrl || SOURCE_PRESENTATION[sourceId].url, capturedAt: snapshot.capturedAt }];
   });
 
-  return { events, sources, boards, generatedAt: now.toISOString() };
+  const rankings = DASHBOARD_SOURCE_IDS.flatMap((sourceId): DashboardRankingGroup[] => {
+    const snapshot = trustedBySource.get(sourceId);
+    if (!snapshot) return [];
+    const items = [...snapshot.records]
+      .sort((left, right) => left.rank - right.rank)
+      .map((record) => ({
+        rank: record.rank,
+        title: record.title,
+        detail: boardDetail(sourceId, record),
+        url: record.canonicalUrl || SOURCE_PRESENTATION[sourceId].url,
+      }));
+    return [{ sourceId, source: SOURCE_PRESENTATION[sourceId].name, capturedAt: snapshot.capturedAt, items }];
+  });
+
+  return { events, sources, boards, rankings, generatedAt: now.toISOString() };
 }
 
 export function emptyDashboardData(now = new Date()): DashboardData {

@@ -1,7 +1,18 @@
 "use client";
 
 import { useMemo, useState, type CSSProperties } from "react";
+import {
+  ArrowRight,
+  ArrowUpRight,
+  CircleAlert,
+  CircleCheck,
+  CloudOff,
+  RefreshCw,
+  SearchX,
+} from "lucide-react";
 import { LiquidGlass } from "./liquid-glass";
+import { ContextTip, EVENT_TERM_HELP, STATUS_TERM_HELP } from "./context-tip.tsx";
+import { useCollapsingHeader } from "./use-collapsing-header.ts";
 import {
   driftwatchHeroArtwork,
   filterPulseEvents,
@@ -18,17 +29,13 @@ const filterLabels: Record<PulseFilter, string> = {
   changed: "Attributes",
 };
 
-function AsciiArrow({ direction = "out" }: { direction?: "out" | "down" }) {
-  return <span className="ascii-arrow" aria-hidden="true">{direction === "down" ? "↓" : "↗"}</span>;
-}
-
 function EventRow({ event, featured = false }: { event: PulseEvent; featured?: boolean }) {
   const kindLabel = event.kind === "changed" ? "Attribute" : event.kind;
 
   return (
     <article className={`event-row ${featured ? "event-row--featured" : ""}`}>
       <div className="event-row__kind">
-        <span className={`event-token event-token--${event.kind}`}>{kindLabel}</span><time>{event.observed}</time>
+        <span className={`event-token event-token--${event.kind}`}><ContextTip label={kindLabel} definition={EVENT_TERM_HELP[event.kind]} /></span><time>{event.observed}</time>
       </div>
       <div className="event-row__entity">
         <div className="event-row__titleline"><h3>{event.entity}</h3>{featured ? <span className="featured-tag">focus</span> : null}</div>
@@ -36,10 +43,10 @@ function EventRow({ event, featured = false }: { event: PulseEvent; featured?: b
       </div>
       <div className="event-row__change">
         {event.previous ? <span>{event.previous}</span> : <span className="new-label">new</span>}
-        <b aria-hidden="true">-&gt;</b><strong>{event.current}</strong>
+        <ArrowRight className="change-arrow" size={14} strokeWidth={2} aria-hidden="true" /><strong>{event.current}</strong>
       </div>
       <div className="event-row__source"><span>{event.source}</span><small>{event.cadence === "6h" ? "6 hour watch" : "monthly index"}</small></div>
-      <button className="row-action pressable glass-button" aria-label={`Open ${event.entity} event`}><LiquidGlass><AsciiArrow /></LiquidGlass></button>
+      <a className="row-action pressable glass-button" href={event.url} target="_blank" rel="noopener noreferrer" aria-label={`Open ${event.entity} at its source`}><LiquidGlass><ArrowUpRight className="action-icon" size={16} strokeWidth={2} aria-hidden="true" /></LiquidGlass></a>
     </article>
   );
 }
@@ -53,7 +60,7 @@ function SourceTape({ sources, followed, onToggle }: { sources: readonly Dashboa
   return (
     <aside className="content-panel sources-panel" id="sources">
       <div className="panel-heading">
-        <h2>Healthy or honestly quiet.</h2>
+        <h2><ContextTip label="Healthy" definition={STATUS_TERM_HELP["healthy"]!} /> or honestly <ContextTip label="quiet" definition={STATUS_TERM_HELP["quiet"]!} />.</h2>
       </div>
       <div className="source-list">
         {sources.map((source) => {
@@ -62,7 +69,7 @@ function SourceTape({ sources, followed, onToggle }: { sources: readonly Dashboa
             <div className="source-row" key={source.id}>
               <span className={`source-monogram source-monogram--${source.accent}`}>[{source.short}]</span>
               <div className="source-row__copy">
-                <strong>{source.name}</strong><span><i className={`status-dot status-dot--${source.status}`} />{source.status} / {source.note}</span>
+                <strong>{source.name}</strong><span><i className={`status-dot status-dot--${source.status}`} /><ContextTip label={source.status} definition={STATUS_TERM_HELP[source.status] ?? "Current source trust state."} /> / {source.note}</span>
               </div>
               <div className="source-row__cadence">
                 <span>{source.cadence}</span>
@@ -75,7 +82,7 @@ function SourceTape({ sources, followed, onToggle }: { sources: readonly Dashboa
         })}
       </div>
       <div className="trust-note">
-        <span className="trust-note__icon">{unhealthy ? "[!]" : "[ok]"}</span>
+        <span className="trust-note__icon">{unhealthy ? <CircleAlert size={16} aria-hidden="true" /> : <CircleCheck size={16} aria-hidden="true" />}</span>
         <div><strong>{trustTitle}</strong><p>{trustCopy}</p></div>
       </div>
     </aside>
@@ -93,6 +100,7 @@ function HeroArtwork() {
         height="941"
         decoding="async"
         fetchPriority="high"
+        loading="eager"
       />
       <img
         className="hero-art__wind"
@@ -101,6 +109,7 @@ function HeroArtwork() {
         width="1672"
         height="941"
         decoding="async"
+        loading="eager"
         aria-hidden="true"
       />
     </figure>
@@ -114,6 +123,7 @@ export function PulseDashboard({ initialData, initialError = null }: { initialDa
   const [refreshing, setRefreshing] = useState(false);
   const [dataError, setDataError] = useState<string | null>(initialError);
   const [followedSources, setFollowedSources] = useState<string[]>(initialData.sources.map((source) => source.id));
+  const { headerCompact, headerSentinelRef } = useCollapsingHeader();
 
   const visibleEvents = useMemo(
     () => filterPulseEvents(data.events, filter).filter((event) => followedSources.includes(event.sourceId)),
@@ -154,27 +164,28 @@ export function PulseDashboard({ initialData, initialError = null }: { initialDa
 
   return (
       <main className="dashboard" id="top">
+        <header className={`topbar glass-control ${headerCompact ? "topbar--compact" : ""}`}>
+          <a className="brand" href="#top" aria-label="Driftwatch home"><span>driftwatch</span></a>
+          <nav aria-label="Primary navigation" style={glassSelectionStyle(navigationIndex)}>
+            <LiquidGlass className="topbar__selection" tone="dark" strength={7} />
+            {navigationItems.map((item) => (
+              <a key={item} className={activeNavigation === item ? "is-active" : ""} href={`#${item}`} onClick={() => setActiveNavigation(item)} aria-current={activeNavigation === item ? "page" : undefined}>{item}</a>
+            ))}
+          </nav>
+          <div className="topbar__actions">
+            <button className={`refresh-button pressable glass-button ${refreshing ? "is-refreshing" : ""}`} onClick={refreshSnapshot}>
+              <LiquidGlass tone="dark"><RefreshCw className="refresh-glyph" size={16} strokeWidth={2} aria-hidden="true" /><span>{refreshing ? "Checking..." : "Check now"}</span></LiquidGlass>
+            </button>
+          </div>
+        </header>
         <section className="hero">
           <HeroArtwork />
-          <header className="topbar glass-control">
-            <a className="brand" href="#top" aria-label="Driftwatch home"><span>driftwatch</span></a>
-            <nav aria-label="Primary navigation" style={glassSelectionStyle(navigationIndex)}>
-              <LiquidGlass className="topbar__selection" tone="dark" strength={7} />
-              {navigationItems.map((item) => (
-                <a key={item} className={activeNavigation === item ? "is-active" : ""} href={`#${item}`} onClick={() => setActiveNavigation(item)} aria-current={activeNavigation === item ? "page" : undefined}>{item}</a>
-              ))}
-            </nav>
-            <div className="topbar__actions">
-              <button className={`refresh-button pressable glass-button ${refreshing ? "is-refreshing" : ""}`} onClick={refreshSnapshot}>
-                <LiquidGlass tone="dark"><span className="refresh-glyph" aria-hidden="true">↻</span><span>{refreshing ? "Checking..." : "Check now"}</span></LiquidGlass>
-              </button>
-            </div>
-          </header>
+          <span ref={headerSentinelRef} className="header-collapse-sentinel" aria-hidden="true" />
           <div className="hero__copy">
             <h1>Watch the lists.<br />Ignore the <em>noise.</em></h1>
             <p>The public builder leaderboards you already check—organized as changes to things, not a dump of pages.</p>
             <div className="hero__actions">
-              <a className="primary-button pressable glass-button" href="#pulse"><LiquidGlass tone="dark">See what moved <span className="hero-button__arrow" aria-hidden="true">→</span></LiquidGlass></a>
+              <a className="primary-button pressable glass-button" href="#pulse"><LiquidGlass tone="dark">See what moved <span className="hero-button__arrow"><ArrowRight size={15} strokeWidth={2} aria-hidden="true" /></span></LiquidGlass></a>
               <a className="secondary-button pressable glass-button" href="#sources"><LiquidGlass>Browse sources</LiquidGlass></a>
             </div>
           </div>
@@ -182,7 +193,16 @@ export function PulseDashboard({ initialData, initialError = null }: { initialDa
 
         <div className="main-surface">
           <div className="main-surface__inner">
-        {dataError ? <div className="data-error" role="status">[offline] {dataError}</div> : null}
+        {dataError ? <div className="data-error" role="status"><CloudOff size={15} aria-hidden="true" />{dataError}</div> : null}
+
+        <section className="content-panel boards" id="boards">
+          <div className="panel-heading"><h2>What's #1 on each watched list.</h2><a className="text-button pressable glass-button" href="/rankings"><LiquidGlass>View all rankings <ArrowUpRight className="action-icon" size={15} strokeWidth={2} aria-hidden="true" /></LiquidGlass></a></div>
+          <div className="board-strip">
+            {data.boards.map((board) => <div key={board.sourceId}><span>{board.source} · #{board.rank}</span><strong>{board.title}</strong><small>{board.detail}</small></div>)}
+            {data.boards.length === 0 ? <div className="board-strip__empty"><strong>No trusted board snapshots yet.</strong><small>Run the live collectors, then check again.</small></div> : null}
+          </div>
+        </section>
+
         <div className="content-grid">
           <section className="content-panel pulse-panel" id="pulse">
             <div className="panel-heading panel-heading--feed">
@@ -195,24 +215,15 @@ export function PulseDashboard({ initialData, initialError = null }: { initialDa
             <div className="event-columns" aria-hidden="true"><span>Event / observed</span><span>Entity / evidence</span><span>Change</span><span>Source</span><span /></div>
             <div className="event-list" role="region" aria-label="Change event feed" tabIndex={0}>
               {visibleEvents.map((event, index) => <EventRow key={event.id} event={event} featured={filter === "all" && index === 0} />)}
-              {visibleEvents.length === 0 ? <div className="empty-state"><span>[ ø ]</span><h3>No followed source matches this view.</h3><p>Turn a source back on, or choose another event type.</p></div> : null}
+              {visibleEvents.length === 0 ? <div className="empty-state"><SearchX size={24} aria-hidden="true" /><h3>No followed source matches this view.</h3><p>Turn a source back on, or choose another event type.</p></div> : null}
             </div>
             <div className="feed-footer">
-              <span>Showing {visibleEvents.length} / {summary.total} meaningful changes</span>
-              {visibleEvents.length > 4 ? <span className="scroll-indicator" aria-hidden="true">Scroll <AsciiArrow direction="down" /></span> : null}
-              <button className="pressable glass-button"><LiquidGlass>Open full changelog <AsciiArrow /></LiquidGlass></button>
+              <span>Showing {visibleEvents.length} / {summary.total} <ContextTip label="meaningful changes" definition="Entity changes that cleared the source's noise threshold." /></span>
+              <a className="footer-action pressable glass-button" href="/changelog"><LiquidGlass>Open full changelog <ArrowUpRight className="action-icon" size={15} strokeWidth={2} aria-hidden="true" /></LiquidGlass></a>
             </div>
           </section>
           <SourceTape sources={data.sources} followed={followedSources} onToggle={toggleSource} />
         </div>
-
-        <section className="content-panel boards" id="boards">
-          <div className="panel-heading"><div><span className="eyebrow">Boards now / trusted snapshot</span><h2>The current state, without the chrome.</h2></div><button className="text-button pressable glass-button"><LiquidGlass>Browse all boards <AsciiArrow /></LiquidGlass></button></div>
-          <div className="board-strip">
-            {data.boards.map((board) => <div key={board.sourceId}><span>[{board.short}] / {String(board.rank).padStart(2, "0")}</span><strong>{board.title}</strong><small>{board.detail}</small></div>)}
-            {data.boards.length === 0 ? <div className="board-strip__empty"><strong>No trusted board snapshots yet.</strong><small>Run the live collectors, then check again.</small></div> : null}
-          </div>
-        </section>
 
           </div>
         </div>

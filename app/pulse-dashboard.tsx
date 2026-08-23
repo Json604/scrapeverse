@@ -51,6 +51,31 @@ function EventRow({ event, featured = false }: { event: PulseEvent; featured?: b
   );
 }
 
+function SourceMenu({ sources, followed, onToggle }: { sources: readonly DashboardSource[]; followed: readonly string[]; onToggle: (source: string) => void }) {
+  return (
+    <details className="source-menu">
+      <summary>Sources</summary>
+      <div className="source-menu__popover" role="group" aria-label="Watched sources">
+        <div className="source-menu__heading"><strong>Watched sources</strong><span>{followed.length}/{sources.length} followed</span></div>
+        {sources.map((source) => {
+          const isFollowed = followed.includes(source.id);
+          return (
+            <div className="source-menu__row" key={source.id}>
+              <a className="source-menu__source-link" href={source.url} target="_blank" rel="noopener noreferrer" aria-label={`Open ${source.name}`}>
+                <span className={`source-menu__monogram source-monogram--${source.accent}`}>[{source.short}]</span>
+                <span><strong>{source.name}</strong><small className="source-menu__status"><i className={`status-dot status-dot--${source.status}`} />{source.status} · {source.rows} rows</small></span>
+              </a>
+              <button className={`follow-toggle pressable ${isFollowed ? "is-on" : ""}`} onClick={() => onToggle(source.id)} aria-label={`${isFollowed ? "Unfollow" : "Follow"} ${source.name}`} aria-pressed={isFollowed}>
+                <LiquidGlass className="follow-toggle__thumb" tone={isFollowed ? "light" : "dark"} strength={5} />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </details>
+  );
+}
+
 function SourceTape({ sources, followed, onToggle }: { sources: readonly DashboardSource[]; followed: readonly string[]; onToggle: (source: string) => void }) {
   const unhealthy = sources.find((source) => !["healthy", "quiet"].includes(source.status));
   const quiet = sources.find((source) => source.status === "quiet");
@@ -119,7 +144,6 @@ function HeroArtwork() {
 export function PulseDashboard({ initialData, initialError = null }: { initialData: DashboardData; initialError?: string | null }) {
   const [data, setData] = useState(initialData);
   const [filter, setFilter] = useState<PulseFilter>("all");
-  const [activeNavigation, setActiveNavigation] = useState("pulse");
   const [refreshing, setRefreshing] = useState(false);
   const [dataError, setDataError] = useState<string | null>(initialError);
   const [followedSources, setFollowedSources] = useState<string[]>(initialData.sources.map((source) => source.id));
@@ -130,8 +154,6 @@ export function PulseDashboard({ initialData, initialError = null }: { initialDa
     [data.events, filter, followedSources],
   );
   const summary = summarizePulse(data.events);
-  const navigationItems = ["pulse", "boards", "sources"] as const;
-  const navigationIndex = navigationItems.indexOf(activeNavigation as (typeof navigationItems)[number]);
   const filterItems = Object.keys(filterLabels) as PulseFilter[];
   const glassSelectionStyle = (index: number) => ({ "--glass-selection-index": index } as CSSProperties);
 
@@ -166,11 +188,10 @@ export function PulseDashboard({ initialData, initialError = null }: { initialDa
       <main className="dashboard" id="top">
         <header className={`topbar glass-control ${headerCompact ? "topbar--compact" : ""}`}>
           <a className="brand" href="#top" aria-label="Driftwatch home"><span>driftwatch</span></a>
-          <nav aria-label="Primary navigation" style={glassSelectionStyle(navigationIndex)}>
-            <LiquidGlass className="topbar__selection" tone="dark" strength={7} />
-            {navigationItems.map((item) => (
-              <a key={item} className={activeNavigation === item ? "is-active" : ""} href={`#${item}`} onClick={() => setActiveNavigation(item)} aria-current={activeNavigation === item ? "page" : undefined}>{item}</a>
-            ))}
+          <nav aria-label="Primary navigation">
+            <a href="/changelog">Changes</a>
+            <a href="/rankings">Rankings</a>
+            <SourceMenu sources={data.sources} followed={followedSources} onToggle={toggleSource} />
           </nav>
           <div className="topbar__actions">
             <button className={`refresh-button pressable glass-button ${refreshing ? "is-refreshing" : ""}`} onClick={refreshSnapshot}>

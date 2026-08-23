@@ -135,7 +135,7 @@ test("the hero keeps only essential chrome and uses a faster smooth wind cycle",
   const dashboard = readFileSync(new URL("../../app/pulse-dashboard.tsx", import.meta.url), "utf8");
   const styles = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
   const hero = dashboard.match(/<section className="hero">([\s\S]*?)<\/section>/)?.[1] ?? "";
-  const navLink = styles.match(/\.topbar nav a\s*{([^}]*)}/)?.[1] ?? "";
+  const navLink = styles.match(/\.topbar nav > a, \.source-menu > summary\s*{([^}]*)}/)?.[1] ?? "";
   const wind = styles.match(/\.hero-art__wind\s*{([^}]*)}/)?.[1] ?? "";
 
   assert.doesNotMatch(hero, /<Mark|preview|account-button|status-pill|hero__proof/);
@@ -173,13 +173,12 @@ test("selectable and pressable controls share the liquid-glass lens system", () 
   const styles = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
 
   assert.match(dashboard, /import \{ LiquidGlass \} from "\.\/liquid-glass"/);
-  assert.match(dashboard, /className="topbar__selection"/);
   assert.match(dashboard, /className="filter-bar__selection"/);
   assert.match(dashboard, /className="follow-toggle__thumb"/);
   assert.match(styles, /--glass-selection-index/);
   assert.match(styles, /cubic-bezier\(0\.22, 1\.15, 0\.36, 1\.06\)/);
   assert.match(styles, /\.liquid-glass__rim/);
-  assert.match(styles, /prefers-reduced-motion:[^)]+[\s\S]+\.topbar__selection/);
+  assert.match(styles, /prefers-reduced-motion:[^)]+[\s\S]+\.filter-bar__selection/);
 });
 
 test("the main content starts with the pulse and uses flat Inter panels", () => {
@@ -350,7 +349,21 @@ test("the header collapses into a centered compact island after leaving the hero
   assert.match(compact, /width:\s*min\(670px,/);
   assert.match(compact, /border-radius:\s*999px/);
   assert.match(styles, /\.topbar:not\(\.topbar--compact\) nav\s*{[^}]*background:\s*transparent/);
-  assert.match(styles, /\.topbar:not\(\.topbar--compact\) \.topbar__selection\s*{[^}]*opacity:\s*0/);
   assert.match(styles, /\.topbar--compact \.brand/);
   assert.match(styles, /prefers-reduced-motion:[^)]+[\s\S]+\.topbar, \.topbar::before, \.explorer-nav\s*{[^}]*transition:\s*none/);
+});
+
+test("the header routes to real destinations and exposes sources as a status popover", () => {
+  const dashboard = readFileSync(new URL("../../app/pulse-dashboard.tsx", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(dashboard, /href="\/changelog"[^>]*>Changes</);
+  assert.match(dashboard, /href="\/rankings"[^>]*>Rankings</);
+  assert.match(dashboard, /function SourceMenu/);
+  assert.match(dashboard, /<details className="source-menu">/);
+  assert.match(dashboard, /aria-label="Watched sources"/);
+  assert.match(dashboard, /source-menu__status/);
+  assert.doesNotMatch(dashboard, /navigationItems|activeNavigation|topbar__selection/);
+  assert.match(styles, /\.source-menu__popover\s*{[^}]*backdrop-filter:\s*blur\(/);
+  assert.match(styles, /\.source-menu__row\s*{/);
 });

@@ -4,7 +4,12 @@ import { getAdapter, allSourceIds, DAILY_SOURCES } from "../../core/sources/inde
 import { BrightDataBackend } from "../../core/backend/brightdata.ts";
 import { FixtureBackend } from "../../core/backend/fixture.ts";
 import { collections } from "../../core/db.ts";
-import type { SourceId, Channel } from "../../core/types.ts";
+import { CliCollectorAdmin } from "../../core/heal/admin.ts";
+import { healSource } from "../../core/heal/saga.ts";
+import { diagnosisFromSnapshot } from "../../core/heal/diagnose.ts";
+import { pickHealTargets, type RunHealCandidate } from "../../core/heal/cron.ts";
+import type { SourceId, Channel, Snapshot } from "../../core/types.ts";
+import type { GateAction } from "../../core/gate.ts";
 
 export function registerRun(program: Command): void {
   program
@@ -15,14 +20,30 @@ export function registerRun(program: Command): void {
     .option("--fixture <path>", "use the local fixture backend instead of Bright Data")
     .option("--url <url>", "override the target url")
     .option("--monthly", 'with "all", include the slow monthly overlay sources')
+    .option("--heal-on-break", "if the gate says heal, run the saga (cron). Never --auto-approve.")
+    .option("--heal-limit <n>", "max heals this invocation (Actions is 45 minutes)", "1")
     .option("--json", "machine-readable output")
     .action(async (source: string, opts: {
       channel: string; collector?: string; fixture?: string; url?: string; json?: boolean; monthly?: boolean;
+      healOnBreak?: boolean; healLimit?: string;
     }) => {
       const ids: SourceId[] = source === "all"
         ? (opts.monthly ? allSourceIds() : DAILY_SOURCES())
         : [source as SourceId];
-      const results = [];
+      const channel = opts.channel as Channel;
+      const results: Array<{
+        source: SourceId;
+        status: string;
+        rows: number;
+        action: GateAction;
+        reason: string;
+        events: number;
+        candidates: number;
+        snapshotId: string | null;
+        inserted: boolean;
+        heal?: { state: string; message: string };
+      }> = [];
+      const healCandidates: Array<RunHealCandidate & { snapshot: Snapshot | null }> = [];
 
       for (const id of ids) {
         const adapter = getAdapter(id);
@@ -43,7 +64,7 @@ export function registerRun(program: Command): void {
 
         const r = await runSource({
           source: id,
-          channel: opts.channel as Channel,
+          channel,
           collectorId,
           backend,
           ...(opts.url ? { url: opts.url } : {}),
@@ -54,6 +75,10 @@ export function registerRun(program: Command): void {
           action: r.gate.action, reason: r.gate.reason,
           events: r.eventsWritten, candidates: r.candidatesWritten,
           snapshotId: r.snapshot.snapshotId, inserted: r.inserted,
+        });
+        healCandidates.push({
+          source: id, channel, status: r.snapshot.status,
+          action: r.gate.action, collectorId, snapshot: r.snapshot,
         });
 
         if (!opts.json) {
@@ -70,6 +95,35 @@ export function registerRun(program: Command): void {
           if (r.snapshot.health.softSignals.length) {
             console.log(`  soft       ${r.snapshot.health.softSignals.slice(0, 3).join("\n             ")}`);
           }
+        }
+      }
+
+      const healLimit = Math.max(0, Number.parseInt(opts.healLimit ?? "1", 10) || 1);
+      const targets = pickHealTargets(healCandidates, { enabled: Boolean(opts.healOnBreak), limit: healLimit });
+      for (const target of targets) {
+        if (!target.snapshot) continue;
+        const row = results.find((r) => r.source === target.source);
+        try {
+          const outcome = await healSource({
+            source: target.source,
+            channel: target.channel,
+            collectorId: target.collectorId,
+            diagnosis: diagnosisFromSnapshot(target.snapshot),
+            before: target.snapshot,
+            admin: new CliCollectorAdmin(),
+            backend: opts.fixture ? new FixtureBackend() : new BrightDataBackend(),
+          });
+          if (row) row.heal = { state: outcome.state, message: outcome.message };
+          if (!opts.json) {
+            console.log(`\n  heal ${target.source}`);
+            console.log(`  ${"─".repeat(52)}`);
+            console.log(`  state      ${outcome.state}`);
+            console.log(`  ${outcome.message}`);
+          }
+        } catch (e) {
+          const message = (e as Error).message;
+          if (row) row.heal = { state: "rejected", message };
+          if (!opts.json) console.log(`\n  heal ${target.source} failed — ${message}`);
         }
       }
 

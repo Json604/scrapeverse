@@ -42,9 +42,11 @@ GET  https://api.brightdata.com/dca/dataset?id=j_…          → rows
 > This is the **custom** collector API. Driftwatch does **not** use the pre-built scraper library
 > (`/datasets/v3/*`) for any source — every collector is created in Scraper Studio from our own spec.
 
-Healing is driven autonomously through the CLI: `scraper heal` → verify → `scraper approve`
-(or `approve --reject`). Scraper Studio does the repair; Driftwatch decides **when** to fire it,
-**what** to say, and — crucially — **whether it actually worked**.
+Healing is driven autonomously through the CLI: `scraper heal` → verify preview →
+`scraper approve --auto-save` (or `approve --reject`). Never `--auto-approve` — that flag
+surrenders the gate. Cron passes `--heal-on-break` so a broken live run fires the same saga
+while you sleep, capped at one heal per tick. Scraper Studio does the repair; Driftwatch
+decides **when** to fire it, **what** to say, and — crucially — **whether it actually worked**.
 
 ## What makes this more than a wrapper
 
@@ -92,7 +94,7 @@ npx tsx src/cli/index.ts timeline github_trending
 |---|---|
 | `init` · `status` | bootstrap; per-source health board |
 | `collector create` · `collector list` | create/list custom Scraper Studio collectors |
-| `run <source\|all>` | the loop: fetch → validate → gate → diff → store |
+| `run <source\|all>` | the loop: fetch → validate → gate → diff → store. Cron adds `--heal-on-break` |
 | `calibrate <source> [--sign]` | inspect genesis extraction; sign a baseline per watch key |
 | `heal <source> [--dry-run]` | diagnose → heal → verify preview → approve/reject → post-verify |
 | `backfill <source>` | seed history from the Wayback Machine |
@@ -186,19 +188,16 @@ Not aspirational — these were run, and the failures are reported as they happe
   output schema — one row per page with an empty `repositories` array — instead of one flat row per
   list item. Driftwatch classified it `schema invalid: zero rows extracted` and **emitted nothing**
   rather than recording 0 rows as truth.
-- **The generated collector is a two-step scraper, and that is the live blocker.** `scraper create`
-  plans `github.com/trending` as a listing→detail pipeline: step one collects repository URLs, step
-  two visits each repository page and emits nothing. Output is 16 rows of
-  `{ repositories: [], product_page_url }` — with the URLs correct and in rank order, so the listing
-  itself parses fine. This shape is **invariant across three different create descriptions**,
-  including one that explicitly forbids following links.
-- **`heal` produces the correct fix; `approve` does not make it live.** A heal prompt demanding flat
-  top-level fields returned a proposed template with **one step**, whose preview emitted every field
-  with real values (`repo: "modular / modular", stars: "28,632", starsToday: "905"`).
-  `scraper approve` reported `status: done` with a `user_approval` step — and a freshly triggered
-  collection still returned the old two-step output. Not caching: verified on a new collection id.
-  The healed template exists and is right; it simply is not the one being served. Activating it is a
-  Scraper Studio browser-IDE action.
+- **`scraper create` prefers a listing→detail two-step.** Step one collects repository URLs, step
+  two visits each repo page and emits nothing: 16 rows of `{ repositories: [], product_page_url }`
+  with URLs in rank order. The listing parses; the payload never fills. Create descriptions now
+  forbid following links; unwrap flattens a filled envelope; empty nested arrays still mean 0 rows.
+- **`heal` produced the correct fix; `approve` without `--auto-save` did not make it live.** A
+  heal prompt demanding flat top-level fields returned a one-step template whose preview had real
+  values (`repo: "modular / modular", stars: "28,632", starsToday: "905"`). `scraper approve` reported
+  `status: done` and kept serving the old two-step output. `--auto-save` is what activates the
+  template; `approve` now always passes it (and still never `--auto-approve`). Live GitHub Trending
+  has since been healthy with real repos.
 - **The saga handles this correctly.** Post-verify sees zero usable rows and rolls back rather than
   marking the collector active — which is the behaviour the regression test below pins down.
 - **Post-verification had a bug, and it is now a regression test.** The saga accepted a

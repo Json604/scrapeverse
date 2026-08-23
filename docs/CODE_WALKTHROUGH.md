@@ -673,7 +673,9 @@ Five read-only routes over the same query functions the CLI and the agent use:
 
 **The CLI is the runtime; Vercel only serves.** Vercel Hobby cron is capped at once per day with a
 10-second function timeout — it cannot hold a scrape-and-poll cycle across six sources. GitHub
-Actions is the scheduler (`.github/workflows/driftwatch.yml`).
+Actions is the scheduler (`.github/workflows/driftwatch.yml`): `run --heal-on-break`, at most one
+saga per tick so a 15-minute heal cannot blow the 45-minute job. `approve` always passes
+`--auto-save` and never `--auto-approve`.
 
 One build-level detail in `config.ts`:
 

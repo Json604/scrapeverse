@@ -5,6 +5,7 @@ import { BrightDataBackend } from "../../core/backend/brightdata.ts";
 import { FixtureBackend } from "../../core/backend/fixture.ts";
 import { lastSnapshot } from "../../core/store/snapshots.ts";
 import { collections } from "../../core/db.ts";
+import { diagnosisFromSnapshot } from "../../core/heal/diagnose.ts";
 import type { SourceId, Channel } from "../../core/types.ts";
 
 export function registerHeal(program: Command): void {
@@ -28,31 +29,7 @@ export function registerHeal(program: Command): void {
       const collectorId = opts.collector ?? opts.fixture ?? (spec as unknown as { collectorId?: string })?.collectorId;
       if (!collectorId) throw new Error(`no collector for ${source}`);
 
-      // Rebuild the diagnosis from the stored snapshot's own signals.
-      const diagnosis = {
-        verdict: before.status,
-        reasons: [...before.health.hardSignals, ...before.health.softSignals],
-        brokenFields: before.health.evidence
-          .filter((e) => e.coverage < 0.9 || e.maxConfusion >= 0.6 || e.breadth >= 0.6)
-          .map((e) => ({
-            field: e.field,
-            baselineCoverage: 1,
-            observedCoverage: e.coverage,
-            symptom: (e.coverage === 0 ? "empty" : e.maxConfusion >= 0.6 || e.breadth >= 0.6 ? "misaligned" : "missing") as
-              "empty" | "misaligned" | "missing",
-          })),
-        suggestedHealPrompt: "",
-      };
-      const { renderHealPrompt } = await import("../../core/validate/index.ts");
-      const { loadWeights } = await import("../../core/config.ts");
-      const { getAdapter } = await import("../../core/sources/index.ts");
-      const adapter = getAdapter(source);
-      const exp = adapter.expectations;
-      diagnosis.suggestedHealPrompt = renderHealPrompt(diagnosis.brokenFields, loadWeights(), {
-        rowCount: before.records.length,
-        totalFields: new Set([...exp.watchKeys, ...exp.requiredFields, "title"]).size,
-        specFields: adapter.spec.fields.map((f) => ({ name: f.name, description: f.description })),
-      });
+      const diagnosis = diagnosisFromSnapshot(before);
 
       const outcome = await healSource({
         source: source as SourceId, channel, collectorId, diagnosis, before,

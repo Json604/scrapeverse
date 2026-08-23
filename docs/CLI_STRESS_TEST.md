@@ -31,6 +31,6 @@ Guards are unit-tested (`src/core/heal/guard.test.ts`, `src/core/eval/runner.tes
 
 ## Still out of scope (honest, not silent)
 
-- Live GitHub Trending collector still returns 0 usable rows (Scraper Studio listing→detail shape; `approve` does not activate the healed template). The engine is fine on fixture/replay channels.
+- Live GitHub Trending is healthy (real repos). `approve --auto-save` is what activates a healed template; cron now passes `--heal-on-break` (one saga per tick). `scraper create` can still invent listing→detail if the description does not forbid following links.
 - Wayback `replay:hist3` after mid-2024 is `broken` (row count vs a 25-row signed baseline). One healthy pair emitted 25 ENTERED + 25 LEFT — real monthly turnover, not a classifier false positive.
 - `ask` needs a configured LLM key. `backfill futurepedia` correctly refuses client-rendered archives.

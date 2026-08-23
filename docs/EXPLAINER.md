@@ -252,8 +252,8 @@ shipped.
 
 **"Why a CLI instead of running it on Vercel?"**
 Vercel Hobby cron is once a day with a 10-second function timeout. It cannot hold a scrape-and-poll
-cycle across six sources. The CLI is the runtime, GitHub Actions is the scheduler, and Vercel serves
-the read API.
+cycle across six sources. The CLI is the runtime, GitHub Actions is the scheduler (`run --heal-on-break`,
+one saga per tick), and Vercel serves the read API.
 
 **"What about personal data?"**
 Excluded at two levels. No `author`/`maker`/`hunter`/`username` field exists in any spec, and
@@ -267,41 +267,12 @@ Things, not people.
 
 Have these ready. Being first to your own limitations is worth more than hoping nobody checks.
 
-**The live GitHub Trending collector returns no usable rows.** Four generations were built:
-
-| | outcome |
-|---|---|
-| v1 | 17 rows, nested schema — one row per *page* with an empty `repositories[]` |
-| v2, v3 | rejected at creation: `Invalid description` (undocumented length limit, ~480 chars OK, 700 not) |
-| v4 | generated cleanly, **0 rows** |
-| v5 | same two-step shape; heal proposed a correct 1-step template that `approve` did not activate |
-
-The mechanism is now known, and it isn't the description. `scraper create` plans the page as a
-listing→detail pipeline: step one collects repository URLs, step two visits each repository page and
-emits nothing. The URLs come back correct and in rank order, so the listing parses fine — the
-payload just never fills. **This shape is invariant across three different create descriptions**,
-including one that explicitly forbids following links.
-
-`scraper heal` *can* fix it. Asked for flat top-level fields, it proposed a **one-step** template
-whose preview emitted every field with real values:
-
-```json
-{"repo": "modular / modular", "description": "The Modular Platform (includes MAX & Mojo)",
- "language": "", "stars": "28,632", "forks": "3,048", "starsToday": "905"}
-```
-
-But `scraper approve` reports `status: done` and the live collector keeps serving the old two-step
-template — verified on a freshly triggered collection, so it isn't caching. The healed template
-exists and is correct; it just isn't the one being served. Activating it is a browser-IDE action.
-
-If someone asks why you didn't just fix it: the fix isn't reachable from the API surface
-(`create`, `run`, `heal`, `approve` are the only commands, and there is no endpoint that returns a
-collector's steps). Worth adding that the system's own post-verify catches this — it sees zero
-usable rows and rolls back instead of marking the collector healthy.
-
-What this does and doesn't cost: the engine, classifier, gate, heal saga, replay and query layer all
-run on identical code paths in the fixture and replay channels. The gap is collector *authoring*,
-sitting in front of a working pipeline — not a gap in the pipeline.
+**`scraper create` still prefers listing→detail.** Four generations taught us the shape: step one
+collects URLs, step two visits each repo and emits nothing (`repositories: []`). Heal proposed a
+correct one-step template; `approve` without `--auto-save` reported `done` and kept serving the old
+steps. `--auto-save` is now always passed (never `--auto-approve`). Live GitHub Trending is healthy
+with real repos. Cron fires the same saga via `--heal-on-break` (one per tick). Create can still
+invent the two-step if you don't forbid following links — heal remains load-bearing, not a one-off.
 
 **Futurepedia cannot be backfilled.** Its archived captures are client-rendered shells. Verified
 empty: 0 pricing tokens, 0 `__NEXT_DATA__`, 0 tool links. So the money-demo source has no

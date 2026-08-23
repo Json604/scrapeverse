@@ -34,10 +34,13 @@ jobs:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
           BRIGHTDATA_API_KEY: ${{ secrets.BRIGHTDATA_API_KEY }}
         run: |
+          # --heal-on-break fires the saga after a broken live run: heal → preview →
+          # approve --auto-save (never --auto-approve) → post-verify → active|rollback.
+          # Cap is 1: a saga is ~15 minutes and this job is 45, after the scrape loop.
           if [ "${{ github.event.schedule }}" = "40 3 1 * *" ]; then
-            npx tsx src/cli/index.ts run all --monthly --json
+            npx tsx src/cli/index.ts run all --monthly --heal-on-break --json
           else
-            npx tsx src/cli/index.ts run "${{ github.event.inputs.source || 'all' }}" --json
+            npx tsx src/cli/index.ts run "${{ github.event.inputs.source || 'all' }}" --heal-on-break --json
           fi
 
       - name: Report health
